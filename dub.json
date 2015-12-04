@@ -1,0 +1,6 @@
+{
+  "name": "jin-thread",
+  "description": "Lock free thread communication",
+  "copyright": "public domain © 2015, jin",
+  "authors": [ "jin" ]
+}
