@@ -17,9 +17,9 @@ alias Message = VariantN!( maxSize!( real , size_t , char[] , void delegate() ) 
 class Queue {
 	const size_t size = 64;
 
-	private size_t head;
-	private Message[ this.size ] messages;
 	private size_t tail;
+	private Message[ this.size ] messages;
+	private size_t head;
 
 	bool full( )
 	{
@@ -42,8 +42,11 @@ class Queue {
 	auto take( )
 	{
 		while( this.empty ) Thread.sleep( 10.dur!"nsecs" );
+		
 		auto value = this.messages[ this.head ];
 		this.head = ( this.head + 1 ) % this.size;
+
+		if( value.type == typeid( Throwable ) ) throw value.get!Throwable;
 		return value;
 	}
 

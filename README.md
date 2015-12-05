@@ -7,8 +7,8 @@ dub --build=release
 iterations=1000000
 writers=2
 messages=2000000
-send/receiveOnly milliseconds=2021
-push/take milliseconds=460
+send/receiveOnly milliseconds=2027
+push/take milliseconds=739
 ```
 
 Import:
@@ -18,10 +18,11 @@ import jin.go
 
 Start new thread:
 ```d
-// child is channel to communicate created thread
+// child is channel to communicate with created thread
 auto child = go!( ( owner ) {
     // owner is channel to communicate with owner thread
 } );
+```
 
 Send messages (waits while outbox is full):
 ```d
