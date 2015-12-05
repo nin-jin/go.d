@@ -2,15 +2,9 @@ module jin.go;
 
 import core.thread;
 import std.stdio;
-import std.concurrency;
 import std.parallelism;
 import std.conv;
-import std.algorithm;
-import std.datetime;
-import std.meta;
-import std.traits;
 import std.variant;
-import std.range;
 
 alias Message = VariantN!( maxSize!( real , size_t , char[] , void delegate() ) );
 
