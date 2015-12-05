@@ -1,14 +1,17 @@
 # threa.d
 Lock free thread communication
 
+std.concurency - [mutex](https://en.wikipedia.org/wiki/Lock_(computer_science))
+jin.go - [wait-free](phttps://en.wikipedia.org/wiki/Non-blocking_algorithm#Wait-freedom)
+
 Current results:
 ```sh
 dub --build=release                                          
 iterations=1000000
 writers=2
 messages=2000000
-send/receiveOnly milliseconds=2027
-push/take milliseconds=739
+std.concurency milliseconds=1847
+jin.go milliseconds=440
 ```
 
 Import:

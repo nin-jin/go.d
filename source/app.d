@@ -27,7 +27,7 @@ void one() {
 
 	timer.stop();
 
-	writeln( "send/receiveOnly milliseconds=" , timer.peek.msecs );
+	writeln( "std.concurency milliseconds=" , timer.peek.msecs );
 }
 
 void two() {
@@ -53,7 +53,7 @@ void two() {
 
 	timer.stop();
 
-	writeln( "push/take milliseconds=" , timer.peek.msecs );
+	writeln( "jin.go milliseconds=" , timer.peek.msecs );
 }
 
 void main() {
