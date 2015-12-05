@@ -7,7 +7,7 @@ Compared:
 
 Current results:
 ```sh
-dub --build=release                                          
+> dub --build=release                                          
 iterations=1000000
 writers=2
 messages=2000000
