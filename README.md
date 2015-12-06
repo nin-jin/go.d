@@ -10,6 +10,14 @@ messages=2000000
 std.concurency milliseconds=1846
 jin.go milliseconds=413
 ```
+```sh
+> dub --build=release                                          
+iterations=100000
+writers=100
+messages=10000000
+std.concurency milliseconds=22485
+jin.go milliseconds=2717
+```
 
 * std.concurency - [mutex](https://en.wikipedia.org/wiki/Lock_(computer_science))
 * jin.go - [wait-free](https://en.wikipedia.org/wiki/Non-blocking_algorithm#Wait-freedom)
