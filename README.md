@@ -1,9 +1,5 @@
-# threa.d
-Lock free thread communication
-
-Compared:
-* std.concurency - [mutex](https://en.wikipedia.org/wiki/Lock_(computer_science))
-* jin.go - [wait-free](https://en.wikipedia.org/wiki/Non-blocking_algorithm#Wait-freedom)
+# go.d
+Wait free thread communication
 
 Current results:
 ```sh
@@ -14,6 +10,9 @@ messages=2000000
 std.concurency milliseconds=1846
 jin.go milliseconds=413
 ```
+
+* std.concurency - [mutex](https://en.wikipedia.org/wiki/Lock_(computer_science))
+* jin.go - [wait-free](https://en.wikipedia.org/wiki/Non-blocking_algorithm#Wait-freedom)
 
 Import:
 ```d
