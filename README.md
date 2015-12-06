@@ -11,8 +11,8 @@ Current results:
 iterations=1000000
 writers=2
 messages=2000000
-std.concurency milliseconds=1847
-jin.go milliseconds=440
+std.concurency milliseconds=1846
+jin.go milliseconds=413
 ```
 
 Import:

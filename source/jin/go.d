@@ -40,7 +40,9 @@ class Queue {
 		auto value = this.messages[ this.head ];
 		this.head = ( this.head + 1 ) % this.size;
 
-		if( value.type == typeid( Throwable ) ) throw value.get!Throwable;
+		auto error = value.peek!Throwable;
+		if( error !is null ) throw *error;
+
 		return value;
 	}
 
