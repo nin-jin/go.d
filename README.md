@@ -31,6 +31,7 @@ Send messages (waits while outbox is full):
 ```d
 channel.push( 123 ); // send int
 channel.push( "abc" ); // send string
+channel.push( new Exception( "error" ) ); // throw exception when receiver try to take message
 ```
 
 Receive messages (waits for any message in inbox/inboxes):
