@@ -1,4 +1,4 @@
-# threa.d
+# go.d
 Lock free thread communication
 
 Compared:
