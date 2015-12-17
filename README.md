@@ -38,6 +38,9 @@ Send messages (waits while outbox is full):
 channel.push( 123 ); // send int
 channel.push( "abc" ); // send string
 channel.push( new Exception( "error" ) ); // throw exception when receiver try to take message
+
+var ouput = Output([ channel1 , channel2 ]); // merge channels
+writeln( input.push( 123 ) ); // push to any free output channel (roundrobin)
 ```
 
 Receive messages (waits for any message in inbox/inboxes):
@@ -45,9 +48,8 @@ Receive messages (waits for any message in inbox/inboxes):
 writeln( channel.take.get!int ); // get int
 writeln( channel.take.get!string ); // get string
 
-// merge channels
-var input = Input([ channel1 , channel2 ]);
-writeln( input.take.get!int );
+var input = Input([ channel1 , channel2 ]); // merge channels
+writeln( input.take.get!int ); // take from any channel (roundrobin)
 ```
 
 ToDo:
