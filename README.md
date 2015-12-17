@@ -5,10 +5,16 @@ Current results:
 ```sh
 > dub --build=release                                          
 iterations=1000000
-writers=2
-messages=2000000
-std.concurency milliseconds=1846
-jin.go milliseconds=413
+writers =2
+readers =2
+std.concurency milliseconds=1902
+jin.go milliseconds=440
+
+iterations=100000
+writers =32
+readers =32
+std.concurency milliseconds=4240
+jin.go milliseconds=761
 ```
 
 * std.concurency - [mutex](https://en.wikipedia.org/wiki/Lock_(computer_science))
@@ -38,8 +44,14 @@ Receive messages (waits for any message in inbox/inboxes):
 writeln( channel.take.get!int ); // get int
 writeln( channel.take.get!string ); // get string
 
-// infinite loop by messages from channels
-foreach( msg ; RoundRobin( [ channel1 , channel2 ] ) ) {
-	writeln( msg.get!int );
-}
+// merge channels
+var input = Input([ channel1 , channel2 ]);
+writeln( input.take.get!int );
 ```
+
+ToDo:
+
+ * Static typed channels
+ * Blocking thread instead sleeping
+ * Fibers multiplexing
+ * Prevent data sharing
