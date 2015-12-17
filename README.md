@@ -16,6 +16,14 @@ readers =32
 std.concurency milliseconds=4240
 jin.go milliseconds=761
 ```
+```sh
+> dub --build=release                                          
+iterations=100000
+writers=100
+messages=10000000
+std.concurency milliseconds=22485
+jin.go milliseconds=2717
+```
 
 * std.concurency - [mutex](https://en.wikipedia.org/wiki/Lock_(computer_science))
 * jin.go - [wait-free](https://en.wikipedia.org/wiki/Non-blocking_algorithm#Wait-freedom)
@@ -37,6 +45,7 @@ Send messages (waits while outbox is full):
 ```d
 channel.push( 123 ); // send int
 channel.push( "abc" ); // send string
+channel.push( new Exception( "error" ) ); // throw exception when receiver try to take message
 ```
 
 Receive messages (waits for any message in inbox/inboxes):
