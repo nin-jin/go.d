@@ -75,7 +75,7 @@ class Channel( InQueue , OutQueue )
 	}
 }
 
-class Input( Message )
+struct Input( Message )
 {
 	Queue!Message[] queues;
 	alias queues this;

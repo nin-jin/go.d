@@ -145,7 +145,7 @@ void two() {
 	StopWatch timer;
 	timer.start();
 
-	auto childs = new Input!(Algebraic!(Data,End));
+	Input!(Algebraic!(Data,End)) childs;
 
 	for( int j = writersCount ; j > 0 ; --j ) {
 		childs ~= go!( char , Algebraic!(Data,End) )( ( owner ){

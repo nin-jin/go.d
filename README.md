@@ -34,7 +34,7 @@ import jin.go
 Start new thread:
 ```d
 // child is channel to communicate with created thread
-auto child = go!( ( owner ) {
+auto child = go!( int /*message to child*/ , Algebraic!(int,Throwable) /*message from child*/ )( ( owner ) {
     // owner is channel to communicate with owner thread
 } );
 ```
@@ -43,19 +43,19 @@ Send messages (waits while outbox is full):
 ```d
 channel.push( 123 ); // send int
 channel.push( "abc" ); // send string
-channel.push( new Exception( "error" ) ); // throw exception when receiver try to take message
+channel.push( new Exception( "error" ) ); // send error
 
-var ouput = Output([ channel1 , channel2 ]); // merge channels
+var ouput = Output([ channel1.outbox , channel2.outbox ]); // merge channels
 writeln( input.push( 123 ) ); // push to any free output channel (roundrobin)
 ```
 
 Receive messages (waits for any message in inbox/inboxes):
 ```d
-writeln( channel.take.get!int ); // get int
-writeln( channel.take.get!string ); // get string
+writeln( channel.take ); // get message
+writeln( channel.take.get!string ); // get string from Algebraic!(int,Throwable)
 
-var input = Input([ channel1 , channel2 ]); // merge channels
-writeln( input.take.get!int ); // take from any channel (roundrobin)
+var input = Input([ channel1.inbox , channel2.inbox ]); // merge channels
+writeln( input.take ); // take from any channel (roundrobin)
 ```
 
 ToDo:
