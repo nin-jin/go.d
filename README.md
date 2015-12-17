@@ -7,14 +7,20 @@ Current results:
 iterations=1000000
 writers =2
 readers =2
-std.concurency milliseconds=1902
-jin.go milliseconds=440
+std.concurency milliseconds=1851
+jin.go milliseconds=145
 
 iterations=100000
-writers =32
-readers =32
-std.concurency milliseconds=4240
-jin.go milliseconds=761
+writers =16
+readers =16
+std.concurency milliseconds=1967
+jin.go milliseconds=130
+
+iterations=10000
+writers =128
+readers =128
+std.concurency milliseconds=4383
+jin.go milliseconds=116
 ```
 
 * std.concurency - [mutex](https://en.wikipedia.org/wiki/Lock_(computer_science))
@@ -52,7 +58,6 @@ writeln( input.take.get!int );
 
 ToDo:
 
- * Static typed channels
  * Blocking thread instead sleeping
  * Fibers multiplexing
  * Prevent data sharing

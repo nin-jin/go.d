@@ -7,8 +7,8 @@ import std.variant;
 import std.range;
 import jin.go;
 
-const int iterations = 100000;
-const int writersCount = 32;
+const int iterations = 1000000;
+const int writersCount = 2;
 const int readersCount = writersCount;
 
 /*
@@ -108,6 +108,11 @@ void two() {
 }
 */
 
+struct Data {
+	int val;
+}
+struct End {}
+
 void one() {
 	StopWatch timer;
 	timer.start();
@@ -115,13 +120,20 @@ void one() {
 	for( int j = writersCount ; j > 0 ; --j ) {
 		spawn({
 			for( int i = iterations - 1 ; i >= 0 ; --i ) {
-				ownerTid.send( i );
+				ownerTid.send( Data( i ) );
 			}
+			ownerTid.send( End() );
 		});
 	}
 
 	for( int j = writersCount ; j > 0 ; --j ) {
-		while( receiveOnly!int ) {}
+		auto doing = true;
+		while( doing ) {
+			receive(
+				( Data val ) {} ,
+				( End val ) { doing = false; } ,
+			);
+		}
 	}
 
 	timer.stop();
@@ -133,18 +145,24 @@ void two() {
 	StopWatch timer;
 	timer.start();
 
-	Input childs;
+	auto childs = new Input!(Algebraic!(Data,End));
 
 	for( int j = writersCount ; j > 0 ; --j ) {
-		childs ~= go(( owner ){
+		childs ~= go!( char , Algebraic!(Data,End) )( ( owner ){
 			for( int i = iterations - 1 ; i >= 0 ; --i ) {
-				owner.push( i );
+				owner.push( Data( i ) );
 			}
-		});
+			owner.push( End() );
+		} ).inbox;
 	}
 
 	for( int j = writersCount ; j > 0 ; --j ) {
-		while( childs.take.get!int ) {}
+		while( true ){
+			if( !childs.take.visit!(
+				( Data val ) => true , 
+				( End val ) => false ,
+			) ) break;
+		}
 	}
 
 	timer.stop();

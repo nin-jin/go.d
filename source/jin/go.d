@@ -7,9 +7,7 @@ import std.conv;
 import std.variant;
 import std.parallelism;
 
-alias Message = VariantN!( maxSize!( real , size_t , char[] , void delegate() ) );
-
-class Queue {
+class Queue( Message ) {
 	const size_t size = 64;
 
 	private size_t tail;
@@ -41,22 +39,19 @@ class Queue {
 		auto value = this.messages[ this.head ];
 		this.head = ( this.head + 1 ) % this.size;
 
-		auto error = value.peek!Throwable;
-		if( error !is null ) throw *error;
-
 		return value;
 	}
 
 }
 
-struct Channel
+class Channel( InQueue , OutQueue )
 {
-	private Queue inbox;
-	private Queue outbox;
+	InQueue inbox;
+	OutQueue outbox;
 
-	auto mirror()
-	{
-		return Channel( this.outbox , this.inbox );
+	this( InQueue inbox , OutQueue outbox ) {
+		this.inbox = inbox;
+		this.outbox = outbox;
 	}
 
 	auto empty()
@@ -64,7 +59,7 @@ struct Channel
 		return this.inbox.empty;
 	}
 
-	Message take()
+	auto take()
 	{
 		return this.inbox.take();
 	}
@@ -80,26 +75,26 @@ struct Channel
 	}
 }
 
-struct Input
+class Input( Message )
 {
-	Channel[] channels;
-	alias channels this;
+	Queue!Message[] queues;
+	alias queues this;
 	
 	size_t next;
 
-	Message take( )
+	auto take( )
 	{
 		auto curr = next;
 
 		while( true ) 
 		{
-			auto channel = channels[ curr ];
-			curr = ( curr + 1 ) % channels.length;
+			auto queue = queues[ curr ];
+			curr = ( curr + 1 ) % queues.length;
 
-			if( !channel.empty )
+			if( !queue.empty )
 			{
 				next = curr;
-				return channel.take();
+				return queue.take();
 			}
 
 			if( curr == next )
@@ -110,10 +105,11 @@ struct Input
 	}
 }
 
-struct Output
+
+struct Output( Message )
 {
-	Channel[] channels;
-	alias channels this;
+	Queue!Message[] queues;
+	alias queues this;
 
 	size_t next;
 
@@ -123,12 +119,12 @@ struct Output
 
 		while( true ) 
 		{
-			auto channel = channels[ curr ];
-			curr = ( curr + 1 ) % channels.length;
+			auto queue = queues[ curr ];
+			curr = ( curr + 1 ) % queues.length;
 
-			if( !channel.full )
+			if( !queue.full )
 			{
-				return channel.push( value );
+				return queue.push( value );
 			}
 
 			if( curr == next )
@@ -139,19 +135,20 @@ struct Output
 	}
 }
 
-auto go( void delegate( Channel channel ) task )
-{
-	auto channel = Channel( new Queue , new Queue );
+Channel!( Queue!OutMessage , Queue!InMessage ) go( InMessage , OutMessage )(
+	void delegate( Channel!( Queue!InMessage , Queue!OutMessage ) channel ) task
+){
+	auto inQueue = new Queue!InMessage;
+	auto outQueue = new Queue!OutMessage;
+
+	auto enChannel = new Channel!( Queue!InMessage , Queue!OutMessage )( inQueue , outQueue );
+	auto exChannel = new Channel!( Queue!OutMessage , Queue!InMessage )( outQueue , inQueue );
 
 	auto thread = new Thread({
-		try {
-			task( channel );
-		} catch( Throwable error ) {
-			channel.push( error );
-		}
+		task( enChannel );
 	});
 	thread.isDaemon = true;
 	thread.start();
 	
-	return channel.mirror;
+	return exChannel;
 }
