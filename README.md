@@ -1,7 +1,20 @@
 # go.d
 Wait free thread communication
 
-Current results:
+# features
+
+* Non blocking message transfer between threads
+* Static typed channels for threads communication
+* Minimal message size
+* Low memory cost
+
+# ToDo
+
+ * Blocking thread instead sleeping
+ * Fibers multiplexing
+
+# Current results
+
 ```sh
 > dub --build=release                                          
 iterations=1000000
@@ -25,6 +38,8 @@ jin.go milliseconds=116
 
 * std.concurency - [mutex](https://en.wikipedia.org/wiki/Lock_(computer_science))
 * jin.go - [wait-free](https://en.wikipedia.org/wiki/Non-blocking_algorithm#Wait-freedom)
+
+# Usage
 
 Import:
 ```d
@@ -57,9 +72,4 @@ writeln( channel.take.get!string ); // get string from Algebraic!(int,Throwable)
 var input = Input([ channel1.inbox , channel2.inbox ]); // merge channels
 writeln( input.take ); // take from any channel (roundrobin)
 ```
-
-ToDo:
-
- * Blocking thread instead sleeping
- * Fibers multiplexing
- * Prevent data sharing
+ 
