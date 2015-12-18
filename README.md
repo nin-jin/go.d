@@ -1,7 +1,7 @@
 # Go.d
 Wait free thread communication
 
-# Geatures
+# Features
 
 * Non blocking message transfer between threads
 * Static typed channels for threads communication
