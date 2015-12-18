@@ -6,6 +6,7 @@ import std.parallelism;
 import std.conv;
 import std.variant;
 import std.parallelism;
+import std.traits;
 
 class Queue( Message ) {
 	const size_t size = 64;
@@ -21,6 +22,8 @@ class Queue( Message ) {
 
 	Value push( Value )( Value value )
 	{
+		static assert( !hasUnsharedAliasing!( Value ) , "Aliases to mutable thread-local data not allowed." ); 
+
 		while( this.full ) Thread.sleep( 10.dur!"nsecs" );
 		this.messages[ this.tail ] = value;
 		this.tail = ( this.tail + 1 ) % this.size;
