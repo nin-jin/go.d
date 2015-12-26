@@ -4,7 +4,7 @@ Wait free thread communication
 
 [![Join the chat at https://gitter.im/nin-jin/go.d](https://badges.gitter.im/nin-jin/go.d.svg)](https://gitter.im/nin-jin/go.d?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-# Geatures
+# Features
 
 * Non blocking message transfer between threads
 * Static typed channels for threads communication
