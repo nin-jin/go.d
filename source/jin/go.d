@@ -225,6 +225,7 @@ class EOC : Exception {
 	}
 }
 
+
 /// Bidirection : start , push*2 , take
 unittest {
 	auto output = new Queue!int;
@@ -240,7 +241,7 @@ unittest {
 	output.push( 3 );
 	output.push( 4 );
 	
-	assert( input.take == 7 );
+	assert( input.take == 3 + 4 );
 }
 
 /// Bidirection : push*2 , start , take
@@ -258,30 +259,7 @@ unittest {
 	auto worker = go!summator( output , input );
 	scope( exit ) worker.join();
 
-	assert( input.take == 7 );
-}
-
-/// Round robin : start*2 , push*4 , take*2
-unittest {
-	Queues!int output;
-	Queues!int input;
-
-	void summator( Queue!int input , Queue!int output ) {
-		output.push( input.take + input.take );
-	}
-
-	auto worker1 = go!summator( output.make() , input.make() );
-	scope( exit ) worker1.join();
-
-	auto worker2 = go!summator( output.make() , input.make() );
-	scope( exit ) worker2.join();
-
-	output.push( 3 ); // 1
-	output.push( 4 ); // 2
-	output.push( 5 ); // 1
-	output.push( 6 ); // 2
-
-	assert( input.take * input.take == ( 3 + 5 ) * ( 4 + 6 ) );
+	assert( input.take == 3 + 4 );
 }
 
 /// Round robin : start*2 , push*4 , take*2
