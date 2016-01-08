@@ -1,27 +1,37 @@
+import core.thread;
 import std.stdio;
+import std.parallelism;
 import std.concurrency;
 import std.conv;
 import std.typecons;
 import std.datetime;
 import std.variant;
 import std.range;
+import std.functional;
 import jin.go;
 
-const int iterations = 1000000;
-const int writersCount = 2;
+const int iterations = 10000;
+const int writersCount = 64;
 const int readersCount = writersCount;
 
-/*
-synchronized class SyncQ {
-	private shared int[] data;
-	void push( int v ) {
-		data ~= v;
+struct Data {
+	int val;
+}
+
+struct End {}
+
+alias Algebraic!( Data , End ) Msg;
+
+
+/*synchronized class SyncQ {
+	private Msg[] data;
+	void push( Value , Args... )( Args args ) {
+		data ~= Msg( Value( args ) );
 	}
-	auto eat( ) {
-		if( data.length == 0 ) return Nullable!int.init;
+	auto take( ) {
 		auto v = data[0];
 		data = data[ 1 .. $ ];
-		return Nullable!int( cast(int) v );
+		return v;
 	}
 }
 
@@ -35,91 +45,106 @@ void one() {
 
 	for( int j = writersCount ; j > 0 ; --j ) {
 		spawn({
-			for( int i = iterations - 1 ; i >= 0 ; --i ) {
-				writeln( ">",i );
-				sq.push( i );
+			try {
+				for( int i = iterations - 1 ; i >= 0 ; --i ) {
+					sq.push!Data( i );
+				}
+				sq.push!End;
+			} catch( Throwable error ) {
+				stderr.writeln( error );
 			}
 		});
 	}
 
 	for( int j = readersCount ; j > 0 ; --j ) {
 		spawn({
-			while( true ) {
-				auto v = sq.eat();
-				writeln( "<",v );
-				if( v.isNull ) continue;
-				if( v == 0 ) break;
+			try {
+				auto doing = true;
+				while( doing ) {
+					if( !sq.take.visit!(
+						( Data val ) => true ,
+						( End val ) => false ,
+					) ) break;
+				}
+				ownerTid.send( End() );
+			} catch( Throwable error ) {
+				stderr.writeln( error );
 			}
-			ownerTid.send( 0L );
 		});
 	}
 
 	for( int j = readersCount ; j > 0 ; --j ) {
-		receiveOnly!long;
+		receiveOnly!End;
 	}
 
 	timer.stop();
 
 	writeln( "std.concurency milliseconds=" , timer.peek.msecs );
-}
+}*/
 
-void two() {
+/*void two1()
+{
 	StopWatch timer;
 	timer.start();
 
-	Output readers;
-	Input writers;
+	Queues!Msg writes;
+	Queues!Msg reades;
 
-	for( int j = writersCount ; j > 0 ; --j ) {
-		writers ~= go( ( owner ) {
-			for( int i = iterations - 1 ; i >= 0 ; --i ) {
-				owner.push( i );
-			}
-		} );
-	}
-
-	for( int j = readersCount ; j > 0 ; --j ) {
-		readers ~= go( ( owner ) {
-			while( true ) {
-				auto v = owner.take.get!int;
-				if( v == 0 ) owner.push( 0L );
-			}
-		} );
-	}
-
-	auto childs = Input( writers ~ readers );
-
-	for( int j = readersCount ; j > 0 ; --j ) {
-		while( true ) {
-			auto msg = childs.take;
-			auto proxy = msg.peek!int;
-			if( proxy !is null ) {
-				readers.push( *proxy );
-				continue;
-			}
-			auto val = msg.get!long;
-			if( !val ) break;
+	void writing( Queue!Msg reader )
+	{
+		for( int i = iterations ; i > 0 ; --i )
+		{
+			reader.push!Data( i );
 		}
+		reader.push!End;
+	}
+
+	void reading( Queue!Msg writer )
+	{
+		writer.handle(( msg ){
+			msg.visit!(
+				( Data val ){ } , 
+				( End val ){ throw new EOC; } ,
+			);
+		}).cycle;
+	}
+
+	for( int j = writersCount ; j > 0 ; --j )
+	{
+		go!writing( writes.make() );
+	}
+
+	for( int j = readersCount ; j > 0 ; --j )
+	{
+		go!reading( reades.make() );
+	}
+
+	for( int j = readersCount ; j > 0 ; --j )
+	{
+		writes.handle( ( msg ) {
+			if( msg.type == typeid( End ) ) throw new EOC;
+			reades.push( msg );
+		} ).cycle;
+	}
+
+	for( int j = readersCount ; j > 0 ; --j )
+	{
+		reades.push!End;
 	}
 
 	timer.stop();
 
 	writeln( "jin.go milliseconds=" , timer.peek.msecs );
-}
-*/
+}*/
 
-struct Data {
-	int val;
-}
-struct End {}
 
-void one() {
+void one2() {
 	StopWatch timer;
 	timer.start();
 
 	for( int j = writersCount ; j > 0 ; --j ) {
 		spawn({
-			for( int i = iterations - 1 ; i >= 0 ; --i ) {
+			for( int i = iterations ; i > 0 ; --i ) {
 				ownerTid.send( Data( i ) );
 			}
 			ownerTid.send( End() );
@@ -141,28 +166,30 @@ void one() {
 	writeln( "std.concurency milliseconds=" , timer.peek.msecs );
 }
 
-void two() {
+void two2() {
 	StopWatch timer;
 	timer.start();
 
-	Input!(Algebraic!(Data,End)) childs;
-
-	for( int j = writersCount ; j > 0 ; --j ) {
-		childs ~= go!( char , Algebraic!(Data,End) )( ( owner ){
-			for( int i = iterations - 1 ; i >= 0 ; --i ) {
-				owner.push( Data( i ) );
-			}
-			owner.push( End() );
-		} ).inbox;
+	Queues!Msg writes;
+	
+	void write( Queue!Msg reader ) {
+		for( int i = iterations ; i > 0 ; --i ) {
+			reader.push!Data( i );
+		}
+		reader.push!End;
 	}
 
 	for( int j = writersCount ; j > 0 ; --j ) {
-		while( true ){
-			if( !childs.take.visit!(
-				( Data val ) => true , 
-				( End val ) => false ,
-			) ) break;
-		}
+		go!write( writes.make() );
+	}
+
+	for( int j = writersCount ; j > 0 ; --j ) {
+		writes.handle( ( msg ) {
+			msg.visit!(
+				( Data val ) { } ,
+				( End end ) { throw new EOC; } ,
+			);
+		} ).cycle;
 	}
 
 	timer.stop();
@@ -174,6 +201,7 @@ void main() {
 	writeln( "iterations=" , iterations );
 	writeln( "writers =" , writersCount );
 	writeln( "readers =" , readersCount );
-	one();
-	two();
+	one2();
+	Thread.sleep( 1.dur!"seconds" );
+	two2();
 }

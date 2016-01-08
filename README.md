@@ -19,21 +19,33 @@ Wait free thread communication
 > dub --build=release                                          
 iterations=1000000
 writers =2
-readers =2
-std.concurency milliseconds=1851
-jin.go milliseconds=145
+readers =1
+std.concurency milliseconds=1891
+jin.go milliseconds=1344
 
 iterations=100000
 writers =16
-readers =16
-std.concurency milliseconds=1967
-jin.go milliseconds=130
+readers =1
+std.concurency milliseconds=1912
+jin.go milliseconds=561
 
 iterations=10000
-writers =128
-readers =128
-std.concurency milliseconds=4383
-jin.go milliseconds=116
+writers =64
+readers =1
+std.concurency milliseconds=1241
+jin.go milliseconds=238
+
+iterations=1000
+writers =256
+readers =1
+std.concurency milliseconds=2855
+jin.go milliseconds=73
+
+iterations=100
+writers =512
+readers =1
+std.concurency milliseconds=1313
+jin.go milliseconds=113
 ```
 
 * std.concurency - [mutex](https://en.wikipedia.org/wiki/Lock_(computer_science))
@@ -46,30 +58,61 @@ Import:
 import jin.go
 ```
 
-Start new thread:
+Create channels:
 ```d
-// child is channel to communicate with created thread
-auto child = go!( int /*message to child*/ , Algebraic!(int,Throwable) /*message from child*/ )( ( owner ) {
-    // owner is channel to communicate with owner thread
-} );
+Queue!int ints;
+
+struct Data { int val }
+struct End {}
+alias Algebraic!(Data,End) Message 
+Queue!Message messages;
+
+Queues!int ints;
+auto queue = ints.make();
 ```
 
-Send messages (waits while outbox is full):
+Start native threads:
 ```d
-channel.push( 123 ); // send int
-channel.push( "abc" ); // send string
-channel.push( new Exception( "error" ) ); // send error
+void incrementor( Queue!int ints , Queue!int res ) {
+	while( true ) {
+		res.push( ints.take + 1 );
+	}
+}
 
-var ouput = Output([ channel1.outbox , channel2.outbox ]); // merge channels
-writeln( input.push( 123 ) ); // push to any free output channel (roundrobin)
+go!incrementor( ints.make() , results.make() );
+```
+
+Send messages (waits while outbox/outboxes is full):
+```d
+ints.push( 123 ); // send message
+ints.push!Data( 123 ); // make and send message
 ```
 
 Receive messages (waits for any message in inbox/inboxes):
 ```d
-writeln( channel.take ); // get message
-writeln( channel.take.get!string ); // get string from Algebraic!(int,Throwable)
+writeln( results.take ); // get one message
+writeln( results.take.get!Data ); // get value from one Message
 
-var input = Input([ channel1.inbox , channel2.inbox ]); // merge channels
-writeln( input.take ); // take from any channel (roundrobin)
+// visit one Message
+results.take.visit!(
+	( Data data ) { writeln( data ); } ,
+	( End end ) { } ,
+);
+
+// handle messages in cycle
+results.handle( ( res ) {
+	writeln( res );
+	if( res == 0 ) throw new EOC; // exit from cycle
+} ).cycle;
+
+// handle messages from multiple channels in cycle
+cycle(
+	ints.handle( ( val ) {
+		res.push( val + 1 );
+	} ,
+	ends.handle( ( end ) {
+		throw new EOC;
+	}
+);
 ```
  
