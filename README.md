@@ -64,12 +64,12 @@ import jin.go
 
 Create channels:
 ```d
-Queue!int ints;
+auto ints = new Queue!int;
 
 struct Data { int val }
 struct End {}
 alias Algebraic!(Data,End) Message 
-Queue!Message messages;
+auto messages = new Queue!Message;
 
 Queues!int ints;
 auto queue = ints.make();

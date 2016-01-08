@@ -102,7 +102,8 @@ struct Queues( Message )
 			auto queue = queues[ curr ];
 			curr = ( curr + 1 ) % queues.length;
 
-			if( !queue.empty ) {
+			if( !queue.empty )
+			{
 				next = curr;
 				return queue.take();
 			}
@@ -126,6 +127,7 @@ struct Queues( Message )
 
 			if( !queue.full )
 			{
+				next = curr;
 				return queue.push( value );
 			}
 
@@ -222,3 +224,152 @@ class EOC : Exception {
 		super(msg, file, line, next);
 	}
 }
+
+/// Bidirection : start , push*2 , take
+unittest {
+	auto output = new Queue!int;
+	auto input = new Queue!int;
+	
+	void summator( Queue!int input , Queue!int output ) {
+		output.push( input.take + input.take );
+	}
+
+	auto child = go!summator( output , input );
+	scope( exit ) child.join();
+	
+	output.push( 3 );
+	output.push( 4 );
+	
+	assert( input.take == 7 );
+}
+
+/// Bidirection : push*2 , start , take
+unittest {
+	auto output = new Queue!int;
+	auto input = new Queue!int;
+
+	void summator( Queue!int input , Queue!int output ) {
+		output.push( input.take + input.take );
+	}
+
+	output.push( 3 );
+	output.push( 4 );
+
+	auto worker = go!summator( output , input );
+	scope( exit ) worker.join();
+
+	assert( input.take == 7 );
+}
+
+/// Round robin : start*2 , push*4 , take*2
+unittest {
+	Queues!int output;
+	Queues!int input;
+
+	void summator( Queue!int input , Queue!int output ) {
+		output.push( input.take + input.take );
+	}
+
+	auto worker1 = go!summator( output.make() , input.make() );
+	scope( exit ) worker1.join();
+
+	auto worker2 = go!summator( output.make() , input.make() );
+	scope( exit ) worker2.join();
+
+	output.push( 3 ); // 1
+	output.push( 4 ); // 2
+	output.push( 5 ); // 1
+	output.push( 6 ); // 2
+
+	assert( input.take * input.take == ( 3 + 5 ) * ( 4 + 6 ) );
+}
+
+/// Round robin : start*2 , push*4 , take*2
+unittest {
+	Queues!int output;
+	Queues!int input;
+
+	void summator( Queue!int input , Queue!int output ) {
+		output.push( input.take + input.take );
+	}
+
+	auto worker1 = go!summator( output.make() , input.make() );
+	scope( exit ) worker1.join();
+
+	auto worker2 = go!summator( output.make() , input.make() );
+	scope( exit ) worker2.join();
+
+	output.push( 3 ); // 1
+	output.push( 4 ); // 2
+	output.push( 5 ); // 1
+	output.push( 6 ); // 2
+
+	assert( input.take * input.take == ( 3 + 5 ) * ( 4 + 6 ) );
+}
+
+/// Event loop on multiple queues
+unittest {
+	auto input1 = new Queue!int;
+	auto input2 = new Queue!int;
+
+	void generating1( Queue!int output ) {
+		output.push( 2 );
+		output.push( 3 );
+		output.push( 0 );
+	}
+
+	void generating2( Queue!int output ) {
+		output.push( 4 );
+		output.push( 5 );
+		output.push( 0 );
+	}
+
+	auto worker1 = go!generating1( input1 );
+	scope( exit ) worker1.join();
+
+	auto worker2 = go!generating2( input2 );
+	scope( exit ) worker2.join();
+
+	int summ1;
+	int summ2;
+
+	for( int i = 0 ; i < 2 ; ++ i ) { 
+		cycle(
+			input1.handle( ( val ) {
+				summ1 += val;
+				if( val == 0 ) throw new EOC;
+			} ) ,
+			input2.handle( ( val ) {
+				summ2 += val;
+				if( val == 0 ) throw new EOC;
+			} ) ,
+		);
+	}
+
+	assert( summ1 == 2 + 3 );
+	assert( summ2 == 4 + 5 );
+}
+
+/// Blocking on buffer overflow
+unittest {
+	auto input = new Queue!int;
+
+	void summator( Queue!int output ) {
+		for( int i = 0 ; i < output.size * 2 ; ++i ) {
+			output.push( 1 );
+		}
+	}
+
+	auto child = go!summator( input );
+	scope( exit ) child.join();
+
+	Waiter.sleepWhile( !input.full );
+
+	int summ;
+	for( int i = 0 ; i < input.size * 2 ; ++i ) {
+		summ += input.take;
+	}
+
+	assert( summ == input.size * 2 );
+}
+
