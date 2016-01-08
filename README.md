@@ -2,10 +2,10 @@
 
 Wait free thread communication
 
-# Features
 [![Build Status](https://travis-ci.org/nin-jin/go.d.svg?branch=master)](https://travis-ci.org/nin-jin/go.d)
 [![Join the chat at https://gitter.im/nin-jin/go.d](https://badges.gitter.im/nin-jin/go.d.svg)](https://gitter.im/nin-jin/go.d?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
+# Features
 
 * Non blocking message transfer between threads
 * Static typed channels for threads communication
