@@ -1,6 +1,7 @@
 module jin.go;
 
 import core.thread;
+import core.atomic;
 import core.sync.condition;
 import std.stdio;
 import std.parallelism;
@@ -44,6 +45,7 @@ class Queue( Message ) {
 		Waiter.sleepWhile( this.full );
 
 		this.messages[ this.tail ] = value;
+		atomicFence;
 		this.tail = ( this.tail + 1 ) % this.size;
 
 		return value;
@@ -59,6 +61,7 @@ class Queue( Message ) {
 		Waiter.sleepWhile( this.empty );
 
 		auto value = this.messages[ this.head ];
+		atomicFence;
 		this.head = ( this.head + 1 ) % this.size;
 
 		return value;
@@ -164,7 +167,7 @@ struct Queues( Message )
 struct Waiter
 {
 
-	int delay = 4;
+	int delay = 1;
 	int maxDelay = 64;
 
 	void wait()
@@ -350,4 +353,3 @@ unittest {
 
 	assert( summ == input.size * 2 );
 }
-
