@@ -44,7 +44,7 @@ if( Size > 3 )
 	{
 		static assert( !hasUnsharedAliasing!( Value ) , "Aliases to mutable thread-local data not allowed." ); 
 
-		Waiter.sleepWhile( this.full );
+		Waiter.sleepWhile( () => this.full );
 
 		auto head = this.head;
 		this.messages[ head ] = value;
@@ -61,7 +61,7 @@ if( Size > 3 )
 
 	auto take( )
 	{
-		Waiter.sleepWhile( this.empty );
+		Waiter.sleepWhile( () => this.empty );
 
 		auto tail = this.tail;
 		auto value = this.messages[ this.tail ];
@@ -82,9 +82,9 @@ if( Size > 3 )
 
 }
 
-struct Queues( Message , size_t size = 64 )
+struct Queues( Message , size_t Size = 64 )
 {
-	Queue!(Message,size)[] queues;
+	Queue!(Message,Size)[] queues;
 	alias queues this;
 
 	size_t next;
@@ -152,7 +152,7 @@ struct Queues( Message , size_t size = 64 )
 
 	auto make( )
 	{
-		auto queue = new Queue!Message;
+		auto queue = new Queue!(Message,Size);
 		this.queues ~= queue;
 		return queue;
 	}
@@ -180,7 +180,7 @@ struct Waiter
 		if( delay <= maxDelay ) delay *= 2;
 	}
 
-	static void sleepWhile( lazy bool cond )
+	static void sleepWhile( bool delegate() cond )
 	{
 		auto waiter = Waiter();
 		while( cond() ) {
@@ -348,7 +348,7 @@ unittest {
 	auto child = go!summator( input );
 	scope( exit ) child.join();
 
-	Waiter.sleepWhile( !input.full );
+	Waiter.sleepWhile( () => !input.full );
 
 	int summ;
 	for( int i = 0 ; i < input.size * 2 ; ++i ) {
