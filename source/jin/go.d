@@ -11,11 +11,12 @@ import std.conv;
 import std.variant;
 import std.traits;
 
-class Queue( Message ) {
-	const size_t size = 64;
+class Queue( Message , size_t size = 64 )
+if( size > 3 ) 
+{
 
 	private size_t tail;
-	private Message[ this.size ] messages;
+	private Message[ size ] messages;
 	private size_t head;
 
 	bool empty( ) 
@@ -25,17 +26,17 @@ class Queue( Message ) {
 
 	bool full( )
 	{
-		return this.tail == ( this.head + 1 ) % this.size;
+		return this.tail == ( this.head + 1 ) % size;
 	}
 
 	auto pending( )
 	{
-		return ( this.head - this.tail ) % this.size;
+		return ( this.head - this.tail ) % size;
 	}
 
 	auto available( )
 	{
-		return this.size - this.pending;
+		return size - this.pending;
 	}
 
 	Value push( Value )( Value value )
@@ -47,7 +48,7 @@ class Queue( Message ) {
 		auto head = this.head;
 		this.messages[ head ] = value;
 		atomicFence;
-		this.head = ( head + 1 ) % this.size;
+		this.head = ( head + 1 ) % size;
 
 		return value;
 	}
@@ -64,7 +65,7 @@ class Queue( Message ) {
 		auto tail = this.tail;
 		auto value = this.messages[ this.tail ];
 		atomicFence;
-		this.tail = ( this.tail + 1 ) % this.size;
+		this.tail = ( this.tail + 1 ) % size;
 
 		return value;
 	}
@@ -80,9 +81,9 @@ class Queue( Message ) {
 
 }
 
-struct Queues( Message )
+struct Queues( Message , size_t size = 64 )
 {
-	Queue!Message[] queues;
+	Queue!(Message,size)[] queues;
 	alias queues this;
 
 	size_t next;
