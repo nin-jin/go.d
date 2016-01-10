@@ -9,3 +9,4 @@ __dummy.html
 *.lib
 /*.visualdproj
 /dub.selections.json
+/*.lst

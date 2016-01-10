@@ -11,9 +11,10 @@ import std.conv;
 import std.variant;
 import std.traits;
 
-class Queue( Message , size_t size = 64 )
-if( size > 3 ) 
+class Queue( Message , size_t Size = 64 )
+if( Size > 3 ) 
 {
+	const size = Size;
 
 	private size_t tail;
 	private Message[ size ] messages;
