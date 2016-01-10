@@ -25,12 +25,12 @@ class Queue( Message ) {
 
 	bool full( )
 	{
-		return this.head == ( this.tail + 1 ) % this.size;
+		return this.tail == ( this.head + 1 ) % this.size;
 	}
 
 	auto pending( )
 	{
-		return ( this.tail - this.head ) % this.size;
+		return ( this.head - this.tail ) % this.size;
 	}
 
 	auto available( )
@@ -44,9 +44,10 @@ class Queue( Message ) {
 
 		Waiter.sleepWhile( this.full );
 
-		this.messages[ this.tail ] = value;
+		auto head = this.head;
+		this.messages[ head ] = value;
 		atomicFence;
-		this.tail = ( this.tail + 1 ) % this.size;
+		this.head = ( head + 1 ) % this.size;
 
 		return value;
 	}
@@ -60,9 +61,10 @@ class Queue( Message ) {
 	{
 		Waiter.sleepWhile( this.empty );
 
-		auto value = this.messages[ this.head ];
+		auto tail = this.tail;
+		auto value = this.messages[ this.tail ];
 		atomicFence;
-		this.head = ( this.head + 1 ) % this.size;
+		this.tail = ( this.tail + 1 ) % this.size;
 
 		return value;
 	}
