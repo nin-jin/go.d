@@ -2,5 +2,7 @@
   "name": "jin-go",
   "description": "Lock free thread communication",
   "copyright": "public domain © 2015, jin",
-  "authors": [ "jin" ]
+  "authors": [ "jin" ],
+  "dependencies": {
+	}
 }

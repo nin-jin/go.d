@@ -171,13 +171,13 @@ struct Queues( Message , size_t Size = 64 )
 struct Waiter
 {
 
-	int delay = 1;
+	int delay = 2;
 	int maxDelay = 64;
 
 	void wait()
 	{
 		Thread.sleep( delay.dur!"nsecs" );
-		if( delay <= maxDelay ) delay *= 2;
+		if( delay < maxDelay ) delay *= 2;
 	}
 
 	static void sleepWhile( bool delegate() cond )
