@@ -97,6 +97,41 @@ while( !one.empty || !two.empty ) {
 }
 ```
  
-# More examples
+# Complete example
 
-* [Unit tests](./source/jin/go.d)
+```d
+import core.time;
+import std.stdio;
+import jin.go;
+
+static auto after( Channel!bool channel , Duration dur )
+{
+	sleep( dur );
+	if( !channel.closed ) channel.next = true;
+}
+
+static auto tick( Channel!bool channel , Duration dur )
+{
+	while( !channel.closed ) after( channel , dur );
+}
+
+void main(){
+	auto ticks = go!tick( 101.msecs );
+	auto booms = go!after( 501.msecs );
+
+	string log;
+
+	while( booms.clear )
+	{
+		while( !ticks.clear ) {
+			writeln( "tick" );
+			ticks.popFront;
+		}
+		writeln( "." );
+		sleep( 51.msecs );
+	}
+	writeln( "BOOM!" );
+}
+```
+
+[More examples in unit tests](./source/jin/go.d)
