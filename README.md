@@ -42,10 +42,10 @@ alias Algebraic!(Data,End) Message
 auto messages = new Channel!Message;
 
 Inputs!int ints;
-auto queue = ints.make;
+auto channel = ints.make;
 
 Outputs!int ints;
-auto queue = ints.make;
+auto channel = ints.make;
 ```
 
 ## Start coroutines
