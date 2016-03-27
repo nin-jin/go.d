@@ -1,21 +1,20 @@
 # Go.d
 
-Wait free thread communication
+Thread-pooled coroutines with lock-free staticaly typed communication channels
 
 [![Build Status](https://travis-ci.org/nin-jin/go.d.svg?branch=master)](https://travis-ci.org/nin-jin/go.d)
 [![Join the chat at https://gitter.im/nin-jin/go.d](https://badges.gitter.im/nin-jin/go.d.svg)](https://gitter.im/nin-jin/go.d?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 # Features
 
-* Non blocking message transfer between threads
-* Static typed channels for threads communication
+* Static typed channels
+* Lock free channels
 * Minimal message size
-* Low memory cost
 
 # ToDo
 
- * Blocking thread instead sleeping
- * Fibers multiplexing
+ * Allow only one input and output link
+ * Autoclose channels
 
 # Current results
 
@@ -57,66 +56,82 @@ jin.go milliseconds=113
 
 # Usage
 
+dub.json:
+```json
+{
+	...
+	"dependencies": {
+		"jin-go": "~>1.0.0"
+	}
+}
+```
+
 Import:
 ```d
-import jin.go
+import jin.go;
 ```
 
 Create channels:
 ```d
-auto ints = new Queue!int;
+auto ints = new Channel!int;
 
 struct Data { int val }
 struct End {}
 alias Algebraic!(Data,End) Message 
-auto messages = new Queue!Message;
+auto messages = new Channel!Message;
 
-Queues!int ints;
-auto queue = ints.make();
+Inputs!int ints;
+auto queue = ints.make;
+
+Outputs!int ints;
+auto queue = ints.make;
 ```
 
-Start native threads:
+Start coroutine:
 ```d
-void incrementor( Queue!int ints , Queue!int res ) {
+void incrementing( Channel!int results , Channel!int inputs ) {
 	while( true ) {
-		res.push( ints.take + 1 );
+		results.next = inputs.next + 1;
 	}
 }
 
-go!incrementor( ints.make() , results.make() );
+go!incrementing( results.make , ints.make );
+auto results = go!incrementing( ints.make );
+
+void squaring( int limit ) {
+	return limit.iota.map( i => i^^2 );
+}
+auto squares = go!squaring( 10 );
 ```
 
 Send messages (waits while outbox/outboxes is full):
 ```d
-ints.push( 123 ); // send message
-ints.push!Data( 123 ); // make and send message
+ints.next = 123; // send message
+ints.next!Data = 123; // make and send message
+ints.put( 123 ); // OutputRange style
 ```
 
 Receive messages (waits for any message in inbox/inboxes):
 ```d
-writeln( results.take ); // get one message
-writeln( results.take.get!Data ); // get value from one Message
+writeln( results.next ); // get one message
+writeln( results.next.get!Data ); // get value from one Message
 
 // visit one Message
-results.take.visit!(
+results.next.visit!(
 	( Data data ) { writeln( data ); } ,
 	( End end ) { } ,
 );
 
 // handle messages in cycle
-results.handle( ( res ) {
-	writeln( res );
-	if( res == 0 ) throw new EOC; // exit from cycle
+while( !results.empty ) {
+	if( !results.clear ) writeln( results.next );
 } ).cycle;
 
 // handle messages from multiple channels in cycle
-cycle(
-	ints.handle( ( val ) {
-		res.push( val + 1 );
-	} ,
-	ends.handle( ( end ) {
-		throw new EOC;
-	}
-);
+while( !one.empty || !two.empty ) {
+	if( !one.clear ) writeln( one.next );
+	if( !two.clear ) writeln( two.next );
+}
 ```
  
+[More examples in tests](./blob/master/source/jin/go.d)

@@ -1,8 +1,10 @@
 {
   "name": "jin-go",
-  "description": "Lock free thread communication",
+  "description": "Thread-pooled coroutines with lock-free staticaly typed communication channels",
   "copyright": "public domain © 2015, jin",
   "authors": [ "jin" ],
   "dependencies": {
-	}
+    "vibe-d:core": "~>0.7.28",
+    "dests": "~>0.3.0"
+  }
 }

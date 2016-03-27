@@ -1,5 +1,6 @@
-.dub
-.vs
+-*
+_*
+.*
 docs.json
 __dummy.html
 *.o
@@ -7,6 +8,7 @@ __dummy.html
 *.exe
 *.sln
 *.lib
-/*.visualdproj
-/dub.selections.json
-/*.lst
+*.visualdproj
+dub.selections.json
+*.lst
+*.dll
