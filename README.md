@@ -99,4 +99,4 @@ while( !one.empty || !two.empty ) {
  
 # More examples
 
-* [Unit tests](./blob/master/source/jin/go.d)
+* [Unit tests](./source/jin/go.d)
