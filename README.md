@@ -88,7 +88,7 @@ results.next.visit!(
 // handle messages in cycle
 while( !results.empty ) {
 	if( !results.clear ) writeln( results.next );
-} ).cycle;
+};
 
 // handle messages from multiple channels in cycle
 while( !one.empty || !two.empty ) {
