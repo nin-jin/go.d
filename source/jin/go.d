@@ -466,7 +466,7 @@ unittest
 	import std.range;
 	import jin.go;
 
-	static auto fibonacci( Channel!int numbers , int count )
+	static auto fibonacci( Channel!int numbers , size_t count )
 	{
 		auto range = recurrence!q{ a[n-1] + a[n-2] }( 0 , 1 ).take( count );
 		foreach( x ; range ) numbers.next = x;
