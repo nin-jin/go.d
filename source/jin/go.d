@@ -87,8 +87,8 @@ class Channel( Message )
 	/// One of two task will no longer operate with this channel
 	bool closed;
 
-	/// Limit channel to 1KB by default
-	this( int size = 1000 / Message.sizeof - 1 )
+	/// Limit channel to 512B by default
+	this( int size = 512 / Message.sizeof - 1 )
 	{
 		enforce( size > 0 , "Channel size must be greater then 0" );
 
@@ -393,229 +393,227 @@ unittest
 }
 
 
-debug( demo )
+
+/// https://tour.golang.org/concurrency/1
+/// "go" template starts function in new asynchronous coroutine
+/// Coroutines starts in thread pool and may be executed in parallel threads.
+/// Only thread safe values can be passed to function.
+unittest
 {
+	import core.time;
+	import std.range;
+	import jin.go;
 
-	/// https://tour.golang.org/concurrency/1
-	/// "go" template starts function in new asynchronous coroutine
-	/// Coroutines starts in thread pool and may be executed in parallel threads.
-	/// Only thread safe values can be passed to function.
-	unittest
+	__gshared static string[] log;
+
+	static void saying( string message )
 	{
-		import core.time;
-		import jin.go;
-
-		__gshared static string[] log;
-
-		static void saying( string message )
-		{
-			for( int i = 0 ; i < 3 ; ++i ) {
-				sleep( 100.msecs );
-				log ~= message;
-			}
+		foreach( _ ; 3.iota ) {
+			sleep( 100.msecs );
+			log ~= message;
 		}
-
-		go!saying( "hello" );
-		sleep( 50.msecs );
-		saying( "world" );
-
-		log.assertEq([ "hello" , "world" , "hello" , "world" , "hello" , "world" ]);
 	}
 
-	/// https://tour.golang.org/concurrency/3
-	/// Channel is one-consumer-one-provider wait-free typed queue with InputRange and OutputRange interfaces support.
-	/// Use "next" property to send and receive messages;
-	unittest
-	{
-		import jin.go;
+	go!saying( "hello" );
+	sleep( 50.msecs );
+	saying( "world" );
 
-		auto numbers = new Channel!int(2);
-		numbers.next = 1;
-		numbers.next = 2;
-		assert( numbers.next == 1 );
-		assert( numbers.next == 2 );
+	log.assertEq([ "hello" , "world" , "hello" , "world" , "hello" , "world" ]);
+}
+
+/// https://tour.golang.org/concurrency/3
+/// Channel is one-consumer-one-provider wait-free typed queue with InputRange and OutputRange interfaces support.
+/// Use "next" property to send and receive messages;
+unittest
+{
+	import jin.go;
+
+	auto numbers = new Channel!int(2);
+	numbers.next = 1;
+	numbers.next = 2;
+	numbers.next.assertEq( 1 );
+	numbers.next.assertEq( 2 );
+}
+
+/// https://tour.golang.org/concurrency/2
+/// Inputs is round robin input channel list with InputRange and Channel interfaces support.
+/// Method "make" creates new channel for every coroutine
+unittest
+{
+	import std.algorithm;
+	import std.range;
+	import jin.go;
+
+	static auto summing( Channel!int sums , const int[] numbers ) {
+		sums.next = numbers.sum;
 	}
 
-	/// https://tour.golang.org/concurrency/2
-	/// Inputs is round robin input channel list with InputRange and Channel interfaces support.
-	/// Method "make" creates new channel for every coroutine
-	unittest
+	immutable int[] numbers = [ 7 , 2 , 8 , -9 , 4 , 0 ];
+
+	Inputs!int sums;
+	go!summing( sums.make(1) , numbers[ 0 .. $/2 ] );
+	go!summing( sums.make(1) , numbers[ $/2 .. $ ] );
+	auto res = sums.take(2).array;
+
+	( res ~ res.sum ).assertEq([ 17 , -5 , 12 ]);
+}
+
+/// https://tour.golang.org/concurrency/4
+/// You can iterate over channel by "foreach" like InputRange, and all standart algorithms support this.
+/// Use "close" method to notify about no more data.
+unittest
+{
+	import std.range;
+	import jin.go;
+
+	static auto fibonacci( Channel!int numbers , int count )
 	{
-		import std.algorithm;
-		import std.range;
-		import jin.go;
-
-		static auto summing( Channel!int sums , const int[] numbers ) {
-			sums.next = numbers.sum;
-		}
-
-		immutable int[] numbers = [ 7 , 2 , 8 , -9 , 4 , 0 ];
-
-		Inputs!int sums;
-		go!summing( sums.make , numbers[ 0 .. $/2 ] );
-		go!summing( sums.make , numbers[ $/2 .. $ ] );
-		auto res = sums.take(2).array;
-
-		res.assertEq([ 17 , -5 ]);
+		auto range = recurrence!q{ a[n-1] + a[n-2] }( 0 , 1 ).take( count );
+		foreach( x ; range ) numbers.next = x;
+		numbers.close();
 	}
 
-	/// https://tour.golang.org/concurrency/4
-	/// You can iterate over channel by "foreach" like InputRange, and all standart algorithms support this.
-	/// Use "close" method to notify about no more data.
-	unittest
+	auto numbers = new Channel!int(10);
+	go!fibonacci( numbers , numbers.size );
+
+	numbers.array.assertEq([ 0 , 1 , 1 , 2 , 3 , 5 , 8 , 13 , 21 , 34 ]);
+}
+
+/// https://tour.golang.org/concurrency/4
+/// Function can return InputRange and it will be automatically converted to input channel.
+unittest
+{
+	import std.range;
+	import jin.go;
+
+	static auto fibonacci( int limit )
 	{
-		import std.range;
-		import jin.go;
-
-		static auto fibonacci( Channel!int numbers , int count )
-		{
-			auto range = recurrence!q{ a[n-1] + a[n-2] }( 0 , 1 ).take( count );
-			foreach( x ; range ) numbers.next = x;
-			numbers.close();
-		}
-
-		auto numbers = new Channel!int(10);
-		go!fibonacci( numbers , numbers.size );
-
-		numbers.array.assertEq([ 0 , 1 , 1 , 2 , 3 , 5 , 8 , 13 , 21 , 34 ]);
+		return recurrence!q{ a[n-1] + a[n-2] }( 0 , 1 ).take( limit );
 	}
 
-	/// https://tour.golang.org/concurrency/4
-	/// Function can return InputRange and it will be automatically converted to input channel.
-	unittest
-	{
-		import std.range;
-		import jin.go;
+	fibonacci( 10 ).array.assertEq([ 0 , 1 , 1 , 2 , 3 , 5 , 8 , 13 , 21 , 34 ]);
+	go!fibonacci( 10 ).array.assertEq([ 0 , 1 , 1 , 2 , 3 , 5 , 8 , 13 , 21 , 34 ]);
+}
 
-		static auto fibonacci( int limit )
+/// https://tour.golang.org/concurrency/5
+/// Use custom loop to watch multiple channels as you want.
+/// Provider can be slave by using "needed" property.
+/// Use "yield" to allow other coroutines executed between cycles.
+unittest
+{
+	import std.range;
+	import jin.go;
+
+	__gshared int[] log;
+
+	static auto fibonacci( Channel!int numbers , Channel!bool control )
+	{
+		auto range = recurrence!q{ a[n-1] + a[n-2] }( 0 , 1 );
+
+		while( !control.closed )
 		{
-			return recurrence!q{ a[n-1] + a[n-2] }( 0 , 1 ).take( limit );
+			if( numbers.needed ) numbers.next = range.next;
+			yield;
 		}
 
-		fibonacci( 10 ).array.assertEq([ 0 , 1 , 1 , 2 , 3 , 5 , 8 , 13 , 21 , 34 ]);
-		go!fibonacci( 10 ).array.assertEq([ 0 , 1 , 1 , 2 , 3 , 5 , 8 , 13 , 21 , 34 ]);
+		log ~= -1;
+		numbers.close();
 	}
 
-	/// https://tour.golang.org/concurrency/5
-	/// Use custom loop to watch multiple channels as you want.
-	/// Provider can be slave by using "needed" property.
-	/// Use "yield" to allow other coroutines executed between cycles.
-	unittest
+	static void print( Channel!bool control , Channel!int numbers )
 	{
-		import std.range;
-		import jin.go;
-
-		__gshared int[] log;
-
-		static auto fibonacci( Channel!int numbers , Channel!bool control )
-		{
-			auto range = recurrence!q{ a[n-1] + a[n-2] }( 0 , 1 );
-
-			while( !control.closed )
-			{
-				if( numbers.needed ) numbers.next = range.next;
-				yield;
-			}
-
-			log ~= -1;
-			numbers.close();
-		}
-
-		static void print( Channel!bool control , Channel!int numbers )
-		{
-			foreach( i ; 10.iota ) log ~= numbers.next;
-			control.close();
-		}
-
-		auto numbers = new Channel!int(1);
-		auto control = new Channel!bool(1);
-
-		go!print( control , numbers );
-		go!fibonacci( numbers , control );
-
-		while( !control.empty || !numbers.empty ) yield;
-
-		log.assertEq([ 0 , 1 , 1 , 2 , 3 , 5 , 8 , 13 , 21 , 34 , -1 ]);
+		foreach( i ; 10.iota ) log ~= numbers.next;
+		control.close();
 	}
 
-	/// https://tour.golang.org/concurrency/6
-	/// You can ommit first argument of Channel type, and it will be autogenerated and returned.
-	unittest
+	auto numbers = new Channel!int(1);
+	auto control = new Channel!bool(1);
+
+	go!print( control , numbers );
+	go!fibonacci( numbers , control );
+
+	while( !control.empty || !numbers.empty ) yield;
+
+	log.assertEq([ 0 , 1 , 1 , 2 , 3 , 5 , 8 , 13 , 21 , 34 , -1 ]);
+}
+
+/// https://tour.golang.org/concurrency/6
+/// You can ommit first argument of Channel type, and it will be autogenerated and returned.
+unittest
+{
+	import core.time;
+	import jin.go;
+
+	static auto after( Channel!bool channel , Duration dur )
 	{
-		import core.time;
-		import jin.go;
-
-		static auto after( Channel!bool channel , Duration dur )
-		{
-			sleep( dur );
-			if( !channel.closed ) channel.next = true;
-		}
-
-		static auto tick( Channel!bool channel , Duration dur )
-		{
-			while( !channel.closed ) after( channel , dur );
-		}
-
-		auto ticks = go!tick( 101.msecs );
-		auto booms = go!after( 501.msecs );
-
-		string log;
-
-		while( booms.clear )
-		{
-			while( !ticks.clear ) {
-				log ~= "tick";
-				ticks.popFront;
-			}
-			log ~= ".";
-			sleep( 51.msecs );
-		}
-		log ~= "BOOM!";
-
-		log.assertEq( "..tick..tick..tick..tick..BOOM!" );
+		sleep( dur );
+		if( !channel.closed ) channel.next = true;
 	}
 
-	/// https://tour.golang.org/concurrency/9
-	unittest
+	static auto tick( Channel!bool channel , Duration dur )
 	{
-		import core.atomic;
-		import core.time;
-		import std.range;
-		import std.typecons;
-		import jin.go;
+		while( !channel.closed ) after( channel , dur );
+	}
 
-		synchronized class SafeCounter
-		{
-			private int[string] store;
+	auto ticks = go!tick( 101.msecs );
+	auto booms = go!after( 501.msecs );
 
-			void inc( string key )
-			{
-				++ store[key];
-			}
+	string log;
 
-			auto opIndex( string key )
-			{
-				return store[ key ];
-			}
-			void opIndexUnary( string op = "++" )( string key )
-			{
-				this.inc( key );
-			}
+	while( booms.clear )
+	{
+		while( !ticks.clear ) {
+			log ~= "tick";
+			ticks.popFront;
 		}
+		log ~= ".";
+		sleep( 51.msecs );
+	}
+	log ~= "BOOM!";
+
+	log.assertEq( "..tick..tick..tick..tick..BOOM!" );
+}
+
+/// https://tour.golang.org/concurrency/9
+unittest
+{
+	import core.atomic;
+	import core.time;
+	import std.range;
+	import std.typecons;
+	import jin.go;
+
+	synchronized class SafeCounter
+	{
+		private int[string] store;
+
+		void inc( string key )
+		{
+			++ store[key];
+		}
+
+		auto opIndex( string key )
+		{
+			return store[ key ];
+		}
+		void opIndexUnary( string op = "++" )( string key )
+		{
+			this.inc( key );
+		}
+	}
 
 		scope static counter = new shared SafeCounter;
 
-		static void working( int i )
-		{
-			++ counter["somekey"];
-		}
-
-		foreach( i ; 1000.iota ) {
-			go!working( i );
-		}
-
-		sleep( 1.seconds );
-
-		counter["somekey"].assertEq( 1000 );
+	static void working( int i )
+	{
+		++ counter["somekey"];
 	}
+
+	foreach( i ; 1000.iota ) {
+		go!working( i );
+	}
+
+	sleep( 1.seconds );
+
+	counter["somekey"].assertEq( 1000 );
 }
