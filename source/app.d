@@ -29,7 +29,7 @@ void main( )
 	Input!int sums;
 	foreach( i ; threads.iota ) {
 		Input!int channel;
-		go!produce( channel.make(1000) );
+		go!produce( channel.make(100) );
 		go!consume( sums.make(1) , channel );
 	}
 

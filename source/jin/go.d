@@ -83,16 +83,26 @@ auto waitFor( Result )( TaskCondition condition , lazy Result check )
 		{
 			value = check();
 			if( value != 0 ) return value;
-			debug writeln("wait");
 			condition.wait();
 		}
+	}
+}
+
+auto waitFor( Result )( lazy Result check )
+{
+	for(;;)
+	{
+		auto value = check();
+		if( value != 0 ) return value;
+		sleep( 1.nsecs );
+		//yield;
 	}
 }
 
 /// Wait-free one input one output queue
 class Queue( Message )
 {
-	TaskCondition conditionOutput;
+	bool closed;
 
 	/// Offset of first not received message
 	ptrdiff_t tail;
@@ -102,8 +112,6 @@ class Queue( Message )
 	
 	/// Offset of next free slot for message
 	ptrdiff_t head;
-
-	TaskCondition conditionInput;
 
 	/// Limit Queue to 512B by default
 	this( int size = 512 / Message.sizeof )
@@ -119,33 +127,14 @@ class Queue( Message )
 		return this.messages.length - 1;
 	}
 
-	/// No more messages in buffer
-	/+bool clear( ) 
-	{
-		return this.tail == this.head;
-	}+/
-
-	/// End of input range
-	/+auto empty( )
-	{
-		if( !this.closed ) return false;
-		atomicFence;
-		return this.clear;
-	}+/
-
-	/// No more messages can be transferred now
-	/+bool full( )
-	{
-		return this.tail == ( this.head + 1 ) % this.messages.length;
-	}+/
-
 	/// Count of messages in buffer now
 	auto pending( )
 	out( res ) {
 		assert( res >= 0 );
 	}
 	body {
-		return ( this.head - this.tail ) % this.messages.length;
+		auto len = this.messages.length;
+		return ( len - this.tail + this.head ) % len;
 	}
 
 	/// Count of messages that can be sended before buffer will be full
@@ -162,16 +151,9 @@ class Queue( Message )
 	{
 		//static assert( isWeaklyIsolated!Value , "Argument type " ~ Value.stringof ~ " is not safe to pass between threads." ); 
 
-		auto needNotify = this.pending == 0;
-
 		this.messages[ this.head ] = value;
 		atomicFence;
 		this.head = ( this.head + 1 ) % this.messages.length;
-
-		if( needNotify ) {
-			auto conditionOutput = this.conditionOutput;
-			if( conditionOutput ) conditionOutput.notify;
-		}
 
 		return value;
 	}
@@ -191,13 +173,7 @@ class Queue( Message )
 	/// Remove message from tail
 	auto popFront( )
 	{
-		auto needNotify = this.available == 0;
 		this.tail = ( this.tail + 1 ) % this.messages.length;
-		atomicFence;
-		if( needNotify ) {
-			auto conditionInput = this.conditionInput;
-			if( conditionInput !is null ) conditionInput.notify;
-		}
 	}
 }
 
@@ -213,17 +189,15 @@ mixin template Channel( Message )
 	/// Offset of current Queue
 	private size_t current;
 
-	private TaskCondition condition = null;
-
 	/// Make new registered Queue
 	auto make( Args... ) ( Args args )
 	{
-		if( this.condition is null ) this.condition = new TaskCondition( new TaskMutex );
-		auto queues = [ new Queue!Message( args ) ];
-		this.addQueues( queues );
+		auto queue = new Queue!Message( args );
+		this.queues ~= queue;
+
 		Complement!Message complement;
-		complement.condition = this.condition;
-		complement.addQueues( queues );
+		complement.queues ~= queue;
+		
 		return complement;
 	}
 
@@ -233,10 +207,15 @@ mixin template Channel( Message )
 	{
 		this.destroy;
 		this.queues = donor.queues;
-		this.condition = donor.condition;
 		this.current = donor.current;
-		donor.queues = [];
-		donor.destroy;
+		donor.queues = null;
+	}
+
+	/// Close all queues on destroy
+	~this()
+	{
+		foreach( queue ; this.queues ) queue.closed = true;
+		this.queues = null;
 	}
 
 	/// Prevent cloning
@@ -250,25 +229,6 @@ struct Output( Message )
 
 	mixin Channel!Message;
 
-	/// Close all channels on destroy
-	~this()
-	{
-		foreach( queue ; this.queues ) {
-			queue.conditionInput = null;
-			auto conditionOutput = queue.conditionOutput;
-			if( conditionOutput !is null ) {
-				conditionOutput.notify;
-			}
-		}
-		this.queues = null;
-	}
-
-	private void addQueues( Queue!Message[] queues )
-	{
-		foreach( queue ; queues ) queue.conditionInput = this.condition;
-		this.queues ~= queues;
-	}
-
 	/// No more messages can be transferred now
 	auto available( )
 	{
@@ -279,7 +239,7 @@ struct Output( Message )
 		do {
 			auto queue = this.queues[ this.current ];
 			
-			if( queue.conditionOutput !is null ) {
+			if( !queue.closed ) {
 				available = queue.available;
 				if( available > 0 ) return available;
 			}
@@ -293,7 +253,7 @@ struct Output( Message )
 	/// Put message to current non full Queue and switch Queue
 	Value put( Value )( Value value )
 	{
-		auto available = this.condition.waitFor( this.available );
+		auto available = waitFor( this.available );
 		if( available == -1 ) return value;
 
 		auto message = this.queues[ this.current ].put( value );
@@ -310,25 +270,6 @@ struct Input( Message )
 
 	mixin Channel!Message;
 
-	private auto addQueues( Queue!Message[] queues )
-	{
-		foreach( queue ; queues ) queue.conditionOutput = this.condition;
-		this.queues ~= queues;
-	}
-
-	/// Close all channels on destroy
-	~this()
-	{
-		foreach( queue ; this.queues ) {
-			queue.conditionOutput = null;
-			auto conditionInput = queue.conditionInput;
-			if( conditionInput !is null ) {
-				conditionInput.notify;
-			}
-		}
-		this.queues = [];
-	}
-
 	/// Minimum count of pending messages
 	auto pending( )
 	{
@@ -342,8 +283,8 @@ struct Input( Message )
 			auto pending2 = queue.pending;
 			if( pending2 > 0 ) return pending2;
 
-			if( queue.conditionInput !is null ) pending = 0;
-
+			if( !queue.closed ) pending = 0;
+			
 			this.current = ( this.current + 1 ) % this.queues.length;
 		} while( this.current != start );
 
@@ -358,7 +299,7 @@ struct Input( Message )
 	/// Get message at tail of current non clear Queue or wait
 	auto front( )
 	{
-		auto pending = this.condition.waitFor( this.pending );
+		auto pending = waitFor( this.pending );
 		enforce( pending != -1 , "Can not get front from closed channel" );
 
 		return this.queues[ this.current ].front;
@@ -375,7 +316,7 @@ struct Input( Message )
     {
         for(;;)
         {
-			auto pending = this.condition.waitFor( this.pending );
+			auto pending = waitFor( this.pending );
 			if( pending == -1 ) return 0;
 
 			if( auto result = proceed( this.next ) ) return result;
@@ -487,13 +428,13 @@ unittest
 unittest
 {
 	static auto generating( ) {
-		return 1.repeat.take( 1000 );
+		return 1.repeat.take( 200 );
 	}
 
 	auto numbs = go!generating;
 	sleep( 10.msecs );
 
-	numbs[].sum.assertEq( 1000 );
+	numbs[].sum.assertEq( 200 );
 }
 
 /+
