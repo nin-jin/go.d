@@ -50,7 +50,7 @@ auto testing( )
 void main( )
 {
 	go!testing;
-	loop;
+	startWorking;
 }
 
 

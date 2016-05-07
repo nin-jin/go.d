@@ -12,31 +12,58 @@ import std.algorithm;
 import std.parallelism;
 import des.ts;
 
-class Work : Fiber
+int workerCount;
+
+static Input!Work worksIn;
+static Output!Work worksOut;
+
+shared static this()
 {
-	this( void delegate() dg )
+	workerCount = totalCPUs;
+
+	Input!Work[] inputs;
+	Output!Work[] outputs;
+
+	outputs.length = workerCount;
+	inputs.length = workerCount;
+
+	foreach( i ; workerCount.iota )
 	{
-		super( dg );
+		foreach( o ; workerCount.iota )
+		{
+			auto queue = new Queue!Work;
+
+			inputs[i].queues ~= queue;
+			outputs[o].queues ~= queue;
+		}
 	}
 
-	int delegate() condition;
-	int check;
+	worksIn = inputs[0];
+	worksOut = outputs[0];
 
-	//static Work[] all;
-
-	static auto current()
+	foreach( t ; workerCount.iota.drop( 1 ) )
 	{
-		return cast(Work) Fiber.getThis;
+		startWorker( outputs[t] , inputs[t] );
 	}
-
 }
 
-void loop()
+static auto startWorker( Output!Work output , Input!Work input )
+{
+	auto thread = new Thread({
+		worksIn = input;
+		worksOut = output;
+		startWorking;
+	});
+
+	thread.start;
+}
+
+static void startWorking()
 {
 	Work[] suspended;
 
 	suspended ~= new Work({
-		foreach( work ; worksInput ) suspended ~= work;
+		foreach( work ; worksIn ) suspended ~= work;
 	});
 
 	while( !suspended.empty )
@@ -47,62 +74,25 @@ void loop()
 
 		foreach( index , work ; works )
 		{
-			work.check = ( work.condition is null ) ? 1 : work.condition();
-			if( work.check != 0 )
-			{
-				work.call();
-				if( work.state == Fiber.State.TERM ) continue;
-			}
+			work.call();
+			if( work.state == Fiber.State.TERM ) continue;
 			suspended ~= work;
 		}
 	}
 }
 
-Output!Work worksOutput;
-Input!Work worksInput;
-int workerCount;
-
-shared static this() {
-	
-	workerCount = totalCPUs;
-
-	Output!Work[] outputs;
-	Input!Work[] inputs;
-
-	outputs.length = workerCount;
-	inputs.length = workerCount;
-
-	foreach( o ; workerCount.iota )
-	{
-		foreach( i ; workerCount.iota )
-		{
-			auto queue = new Queue!Work;
-
-			outputs[o].queues ~= queue;
-			inputs[i].queues ~= queue;
-		}
-	}
-
-	worksInput = inputs[0];
-	worksOutput = outputs[0];
-
-	foreach( t ; workerCount.iota.drop( 1 ) )
-	{
-		startWorker( outputs[t] , inputs[t] );
-	}
-}
-
-auto startWorker( Output!Work output , Input!Work input )
+class Work : Fiber
 {
-	auto thread = new Thread({
-		worksInput = input;
-		worksOutput = output;
-		loop;
-	});
+	this( void delegate() dg )
+	{
+		super( dg );
+	}
 
-	//thread.isDaemon = true;
+	static auto current()
+	{
+		return cast(Work) Fiber.getThis;
+	}
 
-	thread.start;
 }
 
 auto await( Result )( lazy Result check )
@@ -112,9 +102,7 @@ auto await( Result )( lazy Result check )
 		if( value != 0 ) {
 			return value;
 		}
-		//Work.current.condition = () => check;
 		Fiber.yield;
-		//return Work.current.check;
 	}
 }
 
@@ -122,7 +110,7 @@ auto await( Result )( lazy Result check )
 auto go( alias task , Args... ) ( Args args )
 if( is( ReturnType!task : void ) && ( Parameters!task.length == Args.length ) )
 {
-	worksOutput.next = new Work({ task( args ); });
+	worksOut.next = new Work({ task( args ); });
 }
 /+
 /// Run function asynchronously and return Queue connectetd with range returned by function
