@@ -1,5 +1,6 @@
 module jin.go;
 
+import core.thread;
 import core.atomic;
 import core.time;
 import std.stdio;
@@ -8,17 +9,122 @@ import std.exception;
 import std.typecons;
 import std.traits;
 import std.algorithm;
+import std.parallelism;
 import des.ts;
 
-public import vibe.core.core;
-
-/// Run function asynchronously
-auto go( alias task , Args... ) ( auto ref Args args )
-if( is( ReturnType!task : void ) && ( Parameters!task.length == Args.length ) )
+class Work : Fiber
 {
-	return runWorkerTask( &task , args );
+	this( void delegate() dg )
+	{
+		super( dg );
+	}
+
+	int delegate() condition;
+	int check;
+
+	//static Work[] all;
+
+	static auto current()
+	{
+		return cast(Work) Fiber.getThis;
+	}
+
 }
 
+void loop()
+{
+	Work[] suspended;
+
+	suspended ~= new Work({
+		foreach( work ; worksInput ) suspended ~= work;
+	});
+
+	while( !suspended.empty )
+	{
+		auto works = suspended;
+		suspended = [];
+		suspended.reserve( works.length );
+
+		foreach( index , work ; works )
+		{
+			work.check = ( work.condition is null ) ? 1 : work.condition();
+			if( work.check != 0 )
+			{
+				work.call();
+				if( work.state == Fiber.State.TERM ) continue;
+			}
+			suspended ~= work;
+		}
+	}
+}
+
+Output!Work worksOutput;
+Input!Work worksInput;
+int workerCount;
+
+shared static this() {
+	
+	workerCount = totalCPUs;
+
+	Output!Work[] outputs;
+	Input!Work[] inputs;
+
+	outputs.length = workerCount;
+	inputs.length = workerCount;
+
+	foreach( o ; workerCount.iota )
+	{
+		foreach( i ; workerCount.iota )
+		{
+			auto queue = new Queue!Work;
+
+			outputs[o].queues ~= queue;
+			inputs[i].queues ~= queue;
+		}
+	}
+
+	worksInput = inputs[0];
+	worksOutput = outputs[0];
+
+	foreach( t ; workerCount.iota.drop( 1 ) )
+	{
+		startWorker( outputs[t] , inputs[t] );
+	}
+}
+
+auto startWorker( Output!Work output , Input!Work input )
+{
+	auto thread = new Thread({
+		worksInput = input;
+		worksOutput = output;
+		loop;
+	});
+
+	//thread.isDaemon = true;
+
+	thread.start;
+}
+
+auto await( Result )( lazy Result check )
+{
+	for(;;) {
+		auto value = check;
+		if( value != 0 ) {
+			return value;
+		}
+		//Work.current.condition = () => check;
+		Fiber.yield;
+		//return Work.current.check;
+	}
+}
+
+/// Run function asynchronously
+auto go( alias task , Args... ) ( Args args )
+if( is( ReturnType!task : void ) && ( Parameters!task.length == Args.length ) )
+{
+	worksOutput.next = new Work({ task( args ); });
+}
+/+
 /// Run function asynchronously and return Queue connectetd with range returned by function
 auto go( alias task , Args... ) ( auto ref Args args )
 if( isInputRange!(ReturnType!task) )
@@ -34,7 +140,7 @@ if( isInputRange!(ReturnType!task) )
 
 	return future;
 }
-
++/
 /+auto go( alias task , Future , Args... ) ( Future future , auto ref Args args )
 if( isInputRange!(ReturnType!task) )
 {
@@ -44,7 +150,7 @@ if( isInputRange!(ReturnType!task) )
 
 	return future;
 }+/
-
+/+
 /// Run function with autocreated result Queue and return this Queue
 auto go( alias task , Args... )( auto ref Args args )
 if( ( Parameters!task.length == Args.length + 1 )&&( is( Parameters!task[0] == Output!Message , Message ) ) )
@@ -54,7 +160,7 @@ if( ( Parameters!task.length == Args.length + 1 )&&( is( Parameters!task[0] == O
 	go!task( results , args );
 	return future;
 }
-
++/
 /// Cut and return head from input range;
 auto next( Range )( auto ref Range range )
 if( isInputRange!Range )
@@ -70,33 +176,6 @@ auto next( Range , Value )( auto ref Range range , Value value )
 if( isOutputRange!(Range,Value) )
 {
 	return range.put( value );
-}
-
-auto waitFor( Result )( TaskCondition condition , lazy Result check )
-{
-	for(;;)
-	{
-		auto value = check();
-		if( value != 0 ) return value;
-
-		synchronized( condition.mutex )
-		{
-			value = check();
-			if( value != 0 ) return value;
-			condition.wait();
-		}
-	}
-}
-
-auto waitFor( Result )( lazy Result check )
-{
-	for(;;)
-	{
-		auto value = check();
-		if( value != 0 ) return value;
-		sleep( 1.nsecs );
-		//yield;
-	}
 }
 
 /// Wait-free one input one output queue
@@ -138,7 +217,7 @@ class Queue( Message )
 	}
 
 	/// Count of messages that can be sended before buffer will be full
-	auto available( )
+	size_t available( )
 	out( res ) {
 		assert( res >= 0 );
 	}
@@ -212,14 +291,14 @@ mixin template Channel( Message )
 	}
 
 	/// Close all queues on destroy
-	~this()
+	void end( )
 	{
 		foreach( queue ; this.queues ) queue.closed = true;
 		this.queues = null;
 	}
 
 	/// Prevent cloning
-	@disable this(this);
+	//@disable this(this);
 }
 
 /// Round robin output channel
@@ -253,7 +332,7 @@ struct Output( Message )
 	/// Put message to current non full Queue and switch Queue
 	Value put( Value )( Value value )
 	{
-		auto available = waitFor( this.available );
+		auto available = await( this.available );
 		if( available == -1 ) return value;
 
 		auto message = this.queues[ this.current ].put( value );
@@ -299,7 +378,7 @@ struct Input( Message )
 	/// Get message at tail of current non clear Queue or wait
 	auto front( )
 	{
-		auto pending = waitFor( this.pending );
+		auto pending = await( this.pending );
 		enforce( pending != -1 , "Can not get front from closed channel" );
 
 		return this.queues[ this.current ].front;
@@ -316,7 +395,7 @@ struct Input( Message )
     {
         for(;;)
         {
-			auto pending = waitFor( this.pending );
+			auto pending = await( this.pending );
 			if( pending == -1 ) return 0;
 
 			if( auto result = proceed( this.next ) ) return result;

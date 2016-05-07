@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"time"
+	"runtime"
 )
 
 func produce(ints chan<- int) {
@@ -21,6 +22,8 @@ func consume(ints <-chan int, sums chan<- int) {
 }
 
 func main() {
+    fmt.Printf("GOMAXPROCS is %d\n", runtime.GOMAXPROCS(0))
+
 	threads := 1000
 
 	t0 := time.Now()
