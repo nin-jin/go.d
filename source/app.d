@@ -5,46 +5,39 @@ import std.stdio;
 import std.typecons;
 import jin.go;
 
-enum int iterations = 1000;
-enum int threads = 1000;
+enum long iterations = 1000;
+enum long threads = 1000;
 
-auto produce( Output!int numbers )
+auto produce()
 {
-	foreach( i ; iterations.iota ) {
-		numbers.next = i;
-	}
-	numbers.end;
+	return iterations.iota;
 }
 
-auto consume( Output!int sums , Input!int numbers )
+auto consume( Output!long sums , Input!long numbers )
 {
-	int s;
+	long s;
 	foreach( n ; numbers ) s += n;
 	sums.next = s;
-	sums.end;
 }
 
 auto testing( )
 {
-	writeln( "Worker count: " , workerCount );
+	auto timer = StopWatch( AutoStart.yes );
 
-	StopWatch timer;
-	timer.start();
-
-	Input!int sums;
+	Input!long sums;
 	foreach( i ; threads.iota ) {
-		Input!int channel;
-		go!produce( channel.make );
-		go!consume( sums.make(1) , channel );
+		go!consume( sums.make(1) , go!produce );
 	}
 
-	foreach( sum ; sums ) write( sum , " " );
+	long sumsums;
+	foreach( sum ; sums ) sumsums += sum;
 
 	timer.stop();
 
-	writeln( "jin.go: " , timer.peek.msecs );
+	writeln( "Workers\tResult\t\tTime" );
+	writeln( workerCount , "\t" , sumsums , "\t" , timer.peek.msecs , "ms" );
 
-	import core.stdc.stdlib; exit(0);
+	core.stdc.stdlib.exit(0);
 }
 
 void main( )

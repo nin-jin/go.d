@@ -10,19 +10,21 @@ import std.typecons;
 import std.traits;
 import std.algorithm;
 import std.parallelism;
+import std.variant;
 import des.ts;
 
-int workerCount;
+shared int workerCount;
 
 static Input!Work worksIn;
 static Output!Work worksOut;
 
+__gshared Input!Work[] inputs;
+__gshared Output!Work[] outputs;
+int threadNumb;
+
 shared static this()
 {
-	workerCount = totalCPUs;
-
-	Input!Work[] inputs;
-	Output!Work[] outputs;
+	workerCount = totalCPUs - 1;
 
 	outputs.length = workerCount;
 	inputs.length = workerCount;
@@ -38,60 +40,64 @@ shared static this()
 		}
 	}
 
-	worksIn = inputs[0];
-	worksOut = outputs[0];
+	worksIn = inputs[0].release;
+	worksOut = outputs[0].release;
 
 	foreach( t ; workerCount.iota.drop( 1 ) )
 	{
-		startWorker( outputs[t] , inputs[t] );
+		startWorker( t );
 	}
 }
 
-static auto startWorker( Output!Work output , Input!Work input )
+static auto startWorker( int t )
 {
 	auto thread = new Thread({
-		worksIn = input;
-		worksOut = output;
+		threadNumb = t;
+		worksIn = inputs[t].release;
+		worksOut = outputs[t].release;
 		startWorking;
 	});
 
 	thread.start;
 }
 
+Work[] suspended;
+void eater() {
+	foreach( work ; worksIn ) suspended ~= work;
+}
+
 static void startWorking()
 {
-	Work[] suspended;
-
-	suspended ~= new Work({
-		foreach( work ; worksIn ) suspended ~= work;
-	});
+	goLocal!eater;
 
 	while( !suspended.empty )
 	{
-		auto works = suspended;
-		suspended = [];
-		suspended.reserve( works.length );
-
-		foreach( index , work ; works )
+		for( int i = 0 ; i < suspended.length ; ++i )
 		{
+			auto work = suspended[ i ];
 			work.call();
-			if( work.state == Fiber.State.TERM ) continue;
-			suspended ~= work;
+			if( work.state != Fiber.State.TERM ) continue;
+			suspended = suspended[ 0 .. i ] ~ suspended[ i + 1 .. $ ]; 
 		}
 	}
 }
 
 class Work : Fiber
 {
-	this( void delegate() dg )
+	this( TaskFuncInfo taskInfo )
 	{
-		super( dg );
+		this.taskInfo = taskInfo;
+		super({
+			this.taskInfo.func(&this.taskInfo);
+		});
 	}
 
 	static auto current()
 	{
 		return cast(Work) Fiber.getThis;
 	}
+
+	TaskFuncInfo taskInfo;
 
 }
 
@@ -106,13 +112,145 @@ auto await( Result )( lazy Result check )
 	}
 }
 
-/// Run function asynchronously
-auto go( alias task , Args... ) ( Args args )
+template sizeof( Args... )
+{
+	static if( Args.length == 0 ) {
+		enum sizeof = 0;
+	} else static if( Args.length == 1 ) {
+		enum sizeof = Args[0].sizeof;
+	} else {
+		enum sizeof = Args[0].sizeof + sizeof!(Args[ 1 .. $ ]);
+	}
+}
+
+
+
+enum maxTaskParameterSize = 128;
+
+private struct TaskFuncInfo {
+	void function(TaskFuncInfo*) func;
+	void[2*size_t.sizeof] callable = void;
+	void[maxTaskParameterSize] args = void;
+
+	@property ref C typedCallable(C)()
+	{
+		static assert(C.sizeof <= callable.sizeof);
+		return *cast(C*)callable.ptr;
+	}
+
+	@property ref A typedArgs(A)()
+	{
+		static assert(A.sizeof <= args.sizeof);
+		return *cast(A*)args.ptr;
+	}
+
+	void initCallable(C)()
+	{
+		C cinit;
+		this.callable[0 .. C.sizeof] = cast(void[])(&cinit)[0 .. 1];
+	}
+
+	void initArgs(A)()
+	{
+		A ainit;
+		this.args[0 .. A.sizeof] = cast(void[])(&ainit)[0 .. 1];
+	}
+}
+
+alias TaskArgsVariant = VariantN!maxTaskParameterSize;
+
+private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(auto ref CALLABLE callable, ref ARGS args)
+{
+	import std.algorithm : move;
+	import std.traits : hasElaborateAssign;
+
+	struct TARGS { ARGS expand; }
+
+	static assert(CALLABLE.sizeof <= TaskFuncInfo.callable.length);
+	static assert(TARGS.sizeof <= maxTaskParameterSize,
+				  "The arguments passed to run(Worker)Task must not exceed "~
+				  maxTaskParameterSize.to!string~" bytes in total size.");
+
+	static void callDelegate(TaskFuncInfo* tfi) {
+		assert(tfi.func is &callDelegate);
+
+		// copy original call data to stack
+		CALLABLE c;
+		TARGS args;
+		move(*(cast(CALLABLE*)tfi.callable.ptr), c);
+		move(*(cast(TARGS*)tfi.args.ptr), args);
+
+		// reset the info
+		tfi.func = null;
+
+		// make the call
+		mixin(callWithMove!ARGS("c", "args.expand"));
+	}
+
+	TaskFuncInfo tfi;
+	tfi.func = &callDelegate;
+	static if (hasElaborateAssign!CALLABLE) tfi.initCallable!CALLABLE();
+	static if (hasElaborateAssign!TARGS) tfi.initArgs!TARGS();
+
+	() @trusted {
+		tfi.typedCallable!CALLABLE = callable;
+		foreach (i, A; ARGS) {
+			static if (needsMove!A) args[i].move(tfi.typedArgs!TARGS.expand[i]);
+			else tfi.typedArgs!TARGS.expand[i] = args[i];
+		}
+	} ();
+	return tfi;
+}
+
+private string callWithMove(ARGS...)(string func, string args)
+{
+	import std.string;
+	string ret = func ~ "(";
+	foreach (i, T; ARGS) {
+		if (i > 0) ret ~= ", ";
+		ret ~= format("%s[%s]", args, i);
+		static if (needsMove!T) ret ~= ".move";
+	}
+	return ret ~ ");";
+}
+
+private template needsMove(T)
+{
+	template isCopyable(T)
+	{
+		enum isCopyable = __traits(compiles, (T a) { return a; });
+	}
+
+	template isMoveable(T)
+	{
+		enum isMoveable = __traits(compiles, (T a) { return a.move; });
+	}
+
+	enum needsMove = !isCopyable!T;
+
+	static assert(isCopyable!T || isMoveable!T,
+				  "Non-copyable type "~T.stringof~" must be movable with a .move property.");
+}
+
+
+
+auto goLocal( alias task , Args... ) ( auto ref Args args )
 if( is( ReturnType!task : void ) && ( Parameters!task.length == Args.length ) )
 {
-	worksOut.next = new Work({ task( args ); });
+	//foreach( i , Arg ; Args ) static assert( !hasUnsharedAliasing!Arg , "Value of type (" ~ Arg.stringof ~ ") is not safe to pass between threads. Make it immutable or shared!" );
+
+	suspended ~= new Work( makeTaskFuncInfo( &task , args ) );
 }
-/+
+
+/// Run function asynchronously
+auto go( alias task , Args... ) ( auto ref Args args )
+if( is( ReturnType!task : void ) && ( Parameters!task.length == Args.length ) )
+{
+	//foreach( i , Arg ; Args ) static assert( !hasUnsharedAliasing!Arg , "Value of type (" ~ Arg.stringof ~ ") is not safe to pass between threads. Make it immutable or shared!" );
+
+	worksOut.next = new Work( makeTaskFuncInfo( &task , args ) );
+}
+
 /// Run function asynchronously and return Queue connectetd with range returned by function
 auto go( alias task , Args... ) ( auto ref Args args )
 if( isInputRange!(ReturnType!task) )
@@ -122,22 +260,15 @@ if( isInputRange!(ReturnType!task) )
 
 	Input!Message future;
 
-	runWorkerTask( ( Output!Message future , Result function( Args ) task , Args args ) {
+	static void wrapper( Output!Message future , Result function( Args ) task , Args args ) {
 		task( args ).copy( &future );
-	} , future.make , &task , args );
+	}
 
-	return future;
+	go!wrapper( future.make , &task , args );
+
+	return future.release;
 }
-+/
-/+auto go( alias task , Future , Args... ) ( Future future , auto ref Args args )
-if( isInputRange!(ReturnType!task) )
-{
-	runWorkerTask( ( Queue!Value future , Result function( Args ) task , Args args ) {
-		foreach( value ; task( args ) ) future.next = value;
-	} , future , &task , args );
 
-	return future;
-}+/
 /+
 /// Run function with autocreated result Queue and return this Queue
 auto go( alias task , Args... )( auto ref Args args )
@@ -154,7 +285,6 @@ auto next( Range )( auto ref Range range )
 if( isInputRange!Range )
 {
     auto value = range.front;
-	atomicFence;
 	range.popFront;
     return value;
 }
@@ -172,16 +302,16 @@ class Queue( Message )
 	bool closed;
 
 	/// Offset of first not received message
-	ptrdiff_t tail;
+	shared size_t tail;
 
 	/// Cyclic buffer of transferring messages
 	Message[] messages;
 	
 	/// Offset of next free slot for message
-	ptrdiff_t head;
+	shared size_t head;
 
-	/// Limit Queue to 512B by default
-	this( int size = 512 / Message.sizeof )
+	/// Limit Queue to 1048B by default
+	this( int size = 1024 / Message.sizeof )
 	{
 		enforce( size > 0 , "Queue size must be greater then 0" );
 
@@ -219,8 +349,7 @@ class Queue( Message )
 		//static assert( isWeaklyIsolated!Value , "Argument type " ~ Value.stringof ~ " is not safe to pass between threads." ); 
 
 		this.messages[ this.head ] = value;
-		atomicFence;
-		this.head = ( this.head + 1 ) % this.messages.length;
+		atomicStore!( MemoryOrder.rel )( this.head , ( this.head + 1 ) % this.messages.length );
 
 		return value;
 	}
@@ -240,7 +369,7 @@ class Queue( Message )
 	/// Remove message from tail
 	auto popFront( )
 	{
-		this.tail = ( this.tail + 1 ) % this.messages.length;
+		atomicStore!( MemoryOrder.rel )( this.tail , ( this.tail + 1 ) % this.messages.length );
 	}
 }
 
@@ -251,7 +380,7 @@ mixin template Channel( Message )
 	static __isIsolatedType = true;
 
 	/// All registered Queues
-	private Queue!Message[] queues;
+	Queue!Message[] queues;
 
 	/// Offset of current Queue
 	private size_t current;
@@ -278,6 +407,15 @@ mixin template Channel( Message )
 		donor.queues = null;
 	}
 
+	auto release( )
+	{
+		alias Self = typeof(this);
+		auto rVal = Self();
+		rVal.queues = this.queues;
+		this.queues = [];
+		return rVal;
+	}
+
 	/// Close all queues on destroy
 	void end( )
 	{
@@ -285,8 +423,13 @@ mixin template Channel( Message )
 		this.queues = null;
 	}
 
+	~this( )
+	{
+		this.end;
+	}
+
 	/// Prevent cloning
-	//@disable this(this);
+	@disable this(this);
 }
 
 /// Round robin output channel
@@ -324,7 +467,6 @@ struct Output( Message )
 		if( available == -1 ) return value;
 
 		auto message = this.queues[ this.current ].put( value );
-		atomicFence;
 		this.current = ( this.current + 1 ) % this.queues.length;
 		return message;
 	}
@@ -410,7 +552,8 @@ unittest
 	}
 
 	Output!int feed;
-	auto sums = go!summing( feed.make );
+	Input!int sums;
+	go!summing( sums.make , feed.make );
 
 	feed.next = 3;
 	feed.next = 4;
@@ -418,6 +561,7 @@ unittest
 	sums.next.assertEq( 3 + 4 );
 }
 
+/+
 /// Bidirection : put*2 , start , take
 unittest
 {
@@ -431,13 +575,14 @@ unittest
 	feed.next = 3;
 	feed.next = 4;
 
-	auto sums = go!summing( ifeed );
+	Input!int sums;
+	go!summing( sums.make , ifeed );
 
 	sums.next.assertEq( 3 + 4 );
-}
+}+/
 
 /// Round robin : start*2 , put*4 , take*2
-unittest
+/+unittest
 {
 	Output!int feed;
 	Input!int sums;
@@ -456,7 +601,7 @@ unittest
 	feed.next = 6; // 2
 
 	sums[].sort().assertEq([ 3 + 5 , 4 + 6 ]);
-}
+}+/
 /+
 /// Event loop on multiple queues
 unittest
@@ -492,7 +637,7 @@ unittest
 }
 +/
 /// Blocking on buffer overflow
-unittest
+/+unittest
 {
 	static auto generating( ) {
 		return 1.repeat.take( 200 );
@@ -502,7 +647,7 @@ unittest
 	sleep( 10.msecs );
 
 	numbs[].sum.assertEq( 200 );
-}
+}+/
 
 /+
 /// https://tour.golang.org/concurrency/1

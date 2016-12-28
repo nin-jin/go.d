@@ -22,13 +22,11 @@ func consume(ints <-chan int, sums chan<- int) {
 }
 
 func main() {
-    fmt.Printf("GOMAXPROCS is %d\n", runtime.GOMAXPROCS(0))
-
 	threads := 1000
 
 	t0 := time.Now()
 
-	sums := make(chan int, 100)
+	sums := make(chan int, threads)
 
 	for i := 0; i < threads; i++ {
 		ints := make(chan int, 100)
@@ -36,11 +34,13 @@ func main() {
 		go consume(ints, sums)
 	}
 
+	sumsums := 0
 	for i := 0; i < threads; i++ {
-		fmt.Printf("%d ", <- sums)
+		sumsums += <- sums
 	}
 
 	t1 := time.Now()
 
-	fmt.Printf("The call took %v to run.\n", t1.Sub(t0))
+	fmt.Println( "Workers\tResult\t\tTime" );
+	fmt.Printf( "%d\t%d\t%v" , runtime.GOMAXPROCS(0) , sumsums , t1.Sub(t0) );
 }
