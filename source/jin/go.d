@@ -11,6 +11,7 @@ import std.traits;
 import std.algorithm;
 import std.parallelism;
 import std.variant;
+import std.string;
 import des.ts;
 
 shared int workerCount;
@@ -82,13 +83,50 @@ static void startWorking()
 	}
 }
 
+enum maxTaskParameterSize = 128;
+
+string callWithMove(ARGS...)(string func, string args)
+{
+	import std.string;
+	string ret = func ~ "(";
+	foreach (i, T; ARGS) {
+		if (i > 0) ret ~= ", ";
+		ret ~= format("%s[%s].move", args, i);
+	}
+	return ret ~ ");";
+}
+
 class Work : Fiber
 {
-	this( TaskFuncInfo taskInfo )
+	this(CALLABLE, ARGS...)(auto ref CALLABLE callable, ref ARGS args)
 	{
-		this.taskInfo = taskInfo;
+		struct TARGS { ARGS expand; }
+
+		static assert(TARGS.sizeof <= maxTaskParameterSize,
+					  "The arguments passed to run(Worker)Task must not exceed "~
+					  maxTaskParameterSize.to!string~" bytes in total size.");
+
+		struct TaskFuncInfo {
+			void[maxTaskParameterSize] args = void;
+
+			@property ref A typedArgs(A)()
+			{
+				static assert(A.sizeof <= args.sizeof);
+				return *cast(A*)args.ptr;
+			}
+
+		}
+
+		TaskFuncInfo tfi;
+		foreach (i, A; ARGS) {
+			args[i].move( tfi.typedArgs!TARGS.expand[i] );
+		}
+
 		super({
-			this.taskInfo.func(&this.taskInfo);
+			TARGS args2;
+			tfi.typedArgs!TARGS.move( args2 );
+			
+			mixin(callWithMove!ARGS("callable", "args2.expand"));
 		});
 	}
 
@@ -96,8 +134,6 @@ class Work : Fiber
 	{
 		return cast(Work) Fiber.getThis;
 	}
-
-	TaskFuncInfo taskInfo;
 
 }
 
@@ -112,134 +148,12 @@ auto await( Result )( lazy Result check )
 	}
 }
 
-template sizeof( Args... )
-{
-	static if( Args.length == 0 ) {
-		enum sizeof = 0;
-	} else static if( Args.length == 1 ) {
-		enum sizeof = Args[0].sizeof;
-	} else {
-		enum sizeof = Args[0].sizeof + sizeof!(Args[ 1 .. $ ]);
-	}
-}
-
-
-
-enum maxTaskParameterSize = 128;
-
-private struct TaskFuncInfo {
-	void function(TaskFuncInfo*) func;
-	void[2*size_t.sizeof] callable = void;
-	void[maxTaskParameterSize] args = void;
-
-	@property ref C typedCallable(C)()
-	{
-		static assert(C.sizeof <= callable.sizeof);
-		return *cast(C*)callable.ptr;
-	}
-
-	@property ref A typedArgs(A)()
-	{
-		static assert(A.sizeof <= args.sizeof);
-		return *cast(A*)args.ptr;
-	}
-
-	void initCallable(C)()
-	{
-		C cinit;
-		this.callable[0 .. C.sizeof] = cast(void[])(&cinit)[0 .. 1];
-	}
-
-	void initArgs(A)()
-	{
-		A ainit;
-		this.args[0 .. A.sizeof] = cast(void[])(&ainit)[0 .. 1];
-	}
-}
-
-alias TaskArgsVariant = VariantN!maxTaskParameterSize;
-
-private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(auto ref CALLABLE callable, ref ARGS args)
-{
-	import std.algorithm : move;
-	import std.traits : hasElaborateAssign;
-
-	struct TARGS { ARGS expand; }
-
-	static assert(CALLABLE.sizeof <= TaskFuncInfo.callable.length);
-	static assert(TARGS.sizeof <= maxTaskParameterSize,
-				  "The arguments passed to run(Worker)Task must not exceed "~
-				  maxTaskParameterSize.to!string~" bytes in total size.");
-
-	static void callDelegate(TaskFuncInfo* tfi) {
-		assert(tfi.func is &callDelegate);
-
-		// copy original call data to stack
-		CALLABLE c;
-		TARGS args;
-		move(*(cast(CALLABLE*)tfi.callable.ptr), c);
-		move(*(cast(TARGS*)tfi.args.ptr), args);
-
-		// reset the info
-		tfi.func = null;
-
-		// make the call
-		mixin(callWithMove!ARGS("c", "args.expand"));
-	}
-
-	TaskFuncInfo tfi;
-	tfi.func = &callDelegate;
-	static if (hasElaborateAssign!CALLABLE) tfi.initCallable!CALLABLE();
-	static if (hasElaborateAssign!TARGS) tfi.initArgs!TARGS();
-
-	() @trusted {
-		tfi.typedCallable!CALLABLE = callable;
-		foreach (i, A; ARGS) {
-			static if (needsMove!A) args[i].move(tfi.typedArgs!TARGS.expand[i]);
-			else tfi.typedArgs!TARGS.expand[i] = args[i];
-		}
-	} ();
-	return tfi;
-}
-
-private string callWithMove(ARGS...)(string func, string args)
-{
-	import std.string;
-	string ret = func ~ "(";
-	foreach (i, T; ARGS) {
-		if (i > 0) ret ~= ", ";
-		ret ~= format("%s[%s]", args, i);
-		static if (needsMove!T) ret ~= ".move";
-	}
-	return ret ~ ");";
-}
-
-private template needsMove(T)
-{
-	template isCopyable(T)
-	{
-		enum isCopyable = __traits(compiles, (T a) { return a; });
-	}
-
-	template isMoveable(T)
-	{
-		enum isMoveable = __traits(compiles, (T a) { return a.move; });
-	}
-
-	enum needsMove = !isCopyable!T;
-
-	static assert(isCopyable!T || isMoveable!T,
-				  "Non-copyable type "~T.stringof~" must be movable with a .move property.");
-}
-
-
-
 auto goLocal( alias task , Args... ) ( auto ref Args args )
 if( is( ReturnType!task : void ) && ( Parameters!task.length == Args.length ) )
 {
 	//foreach( i , Arg ; Args ) static assert( !hasUnsharedAliasing!Arg , "Value of type (" ~ Arg.stringof ~ ") is not safe to pass between threads. Make it immutable or shared!" );
 
-	suspended ~= new Work( makeTaskFuncInfo( &task , args ) );
+	suspended ~= new Work( &task , args );
 }
 
 /// Run function asynchronously
@@ -248,7 +162,7 @@ if( is( ReturnType!task : void ) && ( Parameters!task.length == Args.length ) )
 {
 	//foreach( i , Arg ; Args ) static assert( !hasUnsharedAliasing!Arg , "Value of type (" ~ Arg.stringof ~ ") is not safe to pass between threads. Make it immutable or shared!" );
 
-	worksOut.next = new Work( makeTaskFuncInfo( &task , args ) );
+	worksOut.next = new Work( &task , args );
 }
 
 /// Run function asynchronously and return Queue connectetd with range returned by function
