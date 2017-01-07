@@ -62,23 +62,25 @@ static auto startWorker( int t )
 	thread.start;
 }
 
-Work[] suspended;
-void eater() {
-	foreach( work ; worksIn ) suspended ~= work;
-}
-
 static void startWorking()
 {
-	goLocal!eater;
-
-	while( !suspended.empty )
+	while( !worksIn.empty )
 	{
-		for( int i = 0 ; i < suspended.length ; ++i )
-		{
-			auto work = suspended[ i ];
+		if( worksIn.pending == 0 ) {
+			Thread.sleep( 1.msecs );
+		} else {
+			auto work = worksIn.front;
 			work.call();
-			if( work.state != Fiber.State.TERM ) continue;
-			suspended = suspended[ 0 .. i ] ~ suspended[ i + 1 .. $ ]; 
+			if( work.state == Fiber.State.TERM ) {
+				worksIn.popFront;
+			} else {
+				if( worksOut.available == 0 ) {
+					Thread.sleep( 1.msecs );
+				} else {
+					worksOut.next = work;
+					worksIn.popFront;
+				}
+			}
 		}
 	}
 }
@@ -148,13 +150,6 @@ auto await( Result )( lazy Result check )
 	}
 }
 
-auto goLocal( alias task , Args... ) ( auto ref Args args )
-if( is( ReturnType!task : void ) && ( Parameters!task.length == Args.length ) )
-{
-	//foreach( i , Arg ; Args ) static assert( !hasUnsharedAliasing!Arg , "Value of type (" ~ Arg.stringof ~ ") is not safe to pass between threads. Make it immutable or shared!" );
-
-	suspended ~= new Work( &task , args );
-}
 
 /// Run function asynchronously
 auto go( alias task , Args... ) ( auto ref Args args )
