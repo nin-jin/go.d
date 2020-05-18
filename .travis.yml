@@ -1,1 +1,14 @@
+os: linux
+dist: bionic
 language: d
+
+jobs:
+    include:
+        - d: dmd-nightly
+        - d: dmd
+        - d: ldc
+    allow_failures:
+        - d: dmd-nightly
+
+script: dub test --compiler=$DC
+
