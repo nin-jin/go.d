@@ -10,170 +10,118 @@ import std.typecons;
 import std.traits;
 import std.algorithm;
 import std.parallelism;
+import std.concurrency;
 import std.variant;
 import std.string;
 import des.ts;
 
-shared int workerCount;
-
-static Input!Work worksIn;
-static Output!Work worksOut;
-
-__gshared Input!Work[] inputs;
-__gshared Output!Work[] outputs;
-int threadNumb;
-
-shared static this()
+auto delegateWithMovedArgs(CALLABLE, ARGS...)(auto ref CALLABLE callable, ref ARGS args)
 {
-	workerCount = totalCPUs - 1;
-
-	outputs.length = workerCount;
-	inputs.length = workerCount;
-
-	foreach( i ; workerCount.iota )
+	struct TARGS
 	{
-		foreach( o ; workerCount.iota )
+		ARGS expand;
+	}
+
+	enum maxTaskParameterSize = 128;
+
+	static assert(TARGS.sizeof <= maxTaskParameterSize,
+			"The arguments must not exceed " ~ maxTaskParameterSize.to!string
+			~ " bytes in total size.");
+
+	struct TaskFuncInfo
+	{
+		void[maxTaskParameterSize] args = void;
+
+		@property ref A typedArgs(A)()
 		{
-			auto queue = new Queue!Work;
-
-			inputs[i].queues ~= queue;
-			outputs[o].queues ~= queue;
-		}
-	}
-
-	worksIn = inputs[0].release;
-	worksOut = outputs[0].release;
-
-	foreach( t ; workerCount.iota.drop( 1 ) )
-	{
-		startWorker( t );
-	}
-}
-
-static auto startWorker( int t )
-{
-	auto thread = new Thread({
-		threadNumb = t;
-		worksIn = inputs[t].release;
-		worksOut = outputs[t].release;
-		startWorking;
-	});
-
-	thread.start;
-}
-
-static void startWorking()
-{
-	while( !worksIn.empty )
-	{
-		if( worksIn.pending == 0 ) {
-			Thread.sleep( 1.msecs );
-		} else {
-			auto work = worksIn.front;
-			work.call();
-			if( work.state == Fiber.State.TERM ) {
-				worksIn.popFront;
-			} else {
-				if( worksOut.available == 0 ) {
-					Thread.sleep( 1.msecs );
-				} else {
-					worksOut.next = work;
-					worksIn.popFront;
-				}
-			}
-		}
-	}
-}
-
-enum maxTaskParameterSize = 128;
-
-string callWithMove(ARGS...)(string func, string args)
-{
-	import std.string;
-	string ret = func ~ "(";
-	foreach (i, T; ARGS) {
-		if (i > 0) ret ~= ", ";
-		ret ~= format("%s[%s].move", args, i);
-	}
-	return ret ~ ");";
-}
-
-class Work : Fiber
-{
-	this(CALLABLE, ARGS...)(auto ref CALLABLE callable, ref ARGS args)
-	{
-		struct TARGS { ARGS expand; }
-
-		static assert(TARGS.sizeof <= maxTaskParameterSize,
-					  "The arguments passed to run(Worker)Task must not exceed "~
-					  maxTaskParameterSize.to!string~" bytes in total size.");
-
-		struct TaskFuncInfo {
-			void[maxTaskParameterSize] args = void;
-
-			@property ref A typedArgs(A)()
-			{
-				static assert(A.sizeof <= args.sizeof);
-				return *cast(A*)args.ptr;
-			}
-
+			static assert(A.sizeof <= args.sizeof);
+			return *cast(A*) args.ptr;
 		}
 
-		TaskFuncInfo tfi;
-		foreach (i, A; ARGS) {
-			args[i].move( tfi.typedArgs!TARGS.expand[i] );
-		}
-
-		super({
-			TARGS args2;
-			tfi.typedArgs!TARGS.move( args2 );
-			
-			mixin(callWithMove!ARGS("callable", "args2.expand"));
-		});
 	}
 
-	static auto current()
+	TaskFuncInfo tfi;
+	foreach (i, A; ARGS)
 	{
-		return cast(Work) Fiber.getThis;
+		args[i].move(tfi.typedArgs!TARGS.expand[i]);
 	}
 
+	string callWithMove(ARGS...)(string func, string args)
+	{
+		import std.string : format;
+
+		string ret = func ~ "(";
+		foreach (i, T; ARGS)
+		{
+			if (i > 0)
+				ret ~= ", ";
+			ret ~= format("%s[%s].move", args, i);
+		}
+		return ret ~ ");";
+	}
+
+	return {
+		TARGS args2;
+		tfi.typedArgs!TARGS.move(args2);
+
+		mixin(callWithMove!ARGS("callable", "args2.expand"));
+	};
 }
 
-auto await( Result )( lazy Result check )
+/// Yields until condition is `0`.
+auto await(Result)(lazy Result check)
 {
-	for(;;) {
+	for (;;)
+	{
 		auto value = check;
-		if( value != 0 ) {
+		if (value != 0)
+		{
 			return value;
 		}
-		Fiber.yield;
+		//Fiber.yield;
 	}
 }
 
+template SafeToTransfer(Value)
+{
+	enum SafeToTransfer = !hasUnsharedAliasing!Value || !__traits(compiles, {
+			Value x, y = x;
+		});
+}
 
 /// Run function asynchronously
-auto go( alias task , Args... ) ( auto ref Args args )
-if( is( ReturnType!task : void ) && ( Parameters!task.length == Args.length ) )
+auto go(alias func, Args...)(auto ref Args args)
+		if (is(ReturnType!func : void) && (Parameters!func.length == Args.length))
 {
-	//foreach( i , Arg ; Args ) static assert( !hasUnsharedAliasing!Arg , "Value of type (" ~ Arg.stringof ~ ") is not safe to pass between threads. Make it immutable or shared!" );
+	foreach (i, Arg; Args)
+	{
+		static assert(SafeToTransfer!Arg,
+				"Value of type (" ~ Arg.stringof
+				~ ") is not safe to pass between threads. Make it immutable or shared!");
+	}
 
-	worksOut.next = new Work( &task , args );
+	auto task = delegateWithMovedArgs(&func, args).task;
+
+	taskPool.put(task);
+
+	return task;
 }
 
 /// Run function asynchronously and return Queue connectetd with range returned by function
-auto go( alias task , Args... ) ( auto ref Args args )
-if( isInputRange!(ReturnType!task) )
+auto go(alias func, Args...)(auto ref Args args)
+		if (isInputRange!(ReturnType!func))
 {
-	alias Result = ReturnType!task;
+	alias Result = ReturnType!func;
 	alias Message = ElementType!Result;
 
 	Input!Message future;
 
-	static void wrapper( Output!Message future , Result function( Args ) task , Args args ) {
-		task( args ).copy( &future );
+	static void wrapper(Output!Message future, Result function(Args) func, Args args)
+	{
+		func(args).copy(&future);
 	}
 
-	go!wrapper( future.make , &task , args );
+	go!wrapper( future.make , &func , args);
 
 	return future.release;
 }
@@ -190,24 +138,24 @@ if( ( Parameters!task.length == Args.length + 1 )&&( is( Parameters!task[0] == O
 }
 +/
 /// Cut and return head from input range;
-auto next( Range )( auto ref Range range )
-if( isInputRange!Range )
+auto next(Range)(auto ref Range range) if (isInputRange!Range)
 {
-    auto value = range.front;
+	auto value = range.front;
 	range.popFront;
-    return value;
+	return value;
 }
 
 /// Put to output range
-auto next( Range , Value )( auto ref Range range , Value value )
-if( isOutputRange!(Range,Value) )
+auto next(Range, Value)(auto ref Range range, Value value)
+		if (isOutputRange!(Range, Value))
 {
-	return range.put( value );
+	return range.put(value);
 }
 
 /// Wait-free one input one output queue
-class Queue( Message )
+class Queue(Message)
 {
+	/// No more messages will be produced
 	bool closed;
 
 	/// Offset of first not received message
@@ -215,50 +163,54 @@ class Queue( Message )
 
 	/// Cyclic buffer of transferring messages
 	Message[] messages;
-	
+
 	/// Offset of next free slot for message
 	shared size_t head;
 
 	/// Limit Queue to 1048B by default
-	this( int size = 1024 / Message.sizeof )
+	this(int size = 1024 / Message.sizeof)
 	{
-		enforce( size > 0 , "Queue size must be greater then 0" );
+		enforce(size > 0, "Queue size must be greater then 0");
 
-		this.messages = new Message[ size + 1 ];
+		this.messages = new Message[size + 1];
 	}
 
 	/// Maximum transferring messages count at one time
-	auto size( )
+	auto size()
 	{
 		return this.messages.length - 1;
 	}
 
 	/// Count of messages in buffer now
-	auto pending( )
-	out( res ) {
-		assert( res >= 0 );
+	auto pending()
+	out (res)
+	{
+		assert(res >= 0);
 	}
-	body {
+	body
+	{
 		auto len = this.messages.length;
-		return ( len - this.tail + this.head ) % len;
+		return (len - this.tail + this.head) % len;
 	}
 
 	/// Count of messages that can be sended before buffer will be full
-	size_t available( )
-	out( res ) {
-		assert( res >= 0 );
+	size_t available()
+	out (res)
+	{
+		assert(res >= 0);
 	}
-	body {
+	body
+	{
 		return this.size - this.pending;
 	}
 
 	/// Put message to head
-	Value put( Value )( Value value )
+	Value put(Value)(Value value)
 	{
 		//static assert( isWeaklyIsolated!Value , "Argument type " ~ Value.stringof ~ " is not safe to pass between threads." ); 
 
-		this.messages[ this.head ] = value;
-		atomicStore!( MemoryOrder.rel )( this.head , ( this.head + 1 ) % this.messages.length );
+		this.messages[this.head] = value;
+		atomicStore!(MemoryOrder.rel)(this.head, (this.head + 1) % this.messages.length);
 
 		return value;
 	}
@@ -270,24 +222,21 @@ class Queue( Message )
 	}+/
 
 	/// Get message at tail
-	auto front( )
+	auto front()
 	{
-		return this.messages[ this.tail ];
+		return this.messages[this.tail];
 	}
 
 	/// Remove message from tail
-	auto popFront( )
+	auto popFront()
 	{
-		atomicStore!( MemoryOrder.rel )( this.tail , ( this.tail + 1 ) % this.messages.length );
+		atomicStore!(MemoryOrder.rel)(this.tail, (this.tail + 1) % this.messages.length);
 	}
 }
 
 /// Common Queue collections realization
-mixin template Channel( Message )
+mixin template Channel(Message)
 {
-	/// Allow transferring between tasks
-	static __isIsolatedType = true;
-
 	/// All registered Queues
 	Queue!Message[] queues;
 
@@ -295,20 +244,20 @@ mixin template Channel( Message )
 	private size_t current;
 
 	/// Make new registered Queue
-	auto make( Args... ) ( Args args )
+	auto make(Args...)(Args args)
 	{
-		auto queue = new Queue!Message( args );
+		auto queue = new Queue!Message(args);
 		this.queues ~= queue;
 
 		Complement!Message complement;
 		complement.queues ~= queue;
-		
+
 		return complement;
 	}
 
 	// Move queues on channel assigning
-	void opAssign( DonorMessage )( ref Channel!DonorMessage donor )
-	if( is( DonorMessage : Message ) )
+	void opAssign(DonorMessage)(ref Channel!DonorMessage donor)
+			if (is(DonorMessage : Message))
 	{
 		this.destroy;
 		this.queues = donor.queues;
@@ -316,7 +265,7 @@ mixin template Channel( Message )
 		donor.queues = null;
 	}
 
-	auto release( )
+	auto release()
 	{
 		alias Self = typeof(this);
 		auto rVal = Self();
@@ -326,13 +275,14 @@ mixin template Channel( Message )
 	}
 
 	/// Close all queues on destroy
-	void end( )
+	void end()
 	{
-		foreach( queue ; this.queues ) queue.closed = true;
+		foreach (queue; this.queues)
+			queue.closed = true;
 		this.queues = null;
 	}
 
-	~this( )
+	~this()
 	{
 		this.end;
 	}
@@ -342,132 +292,144 @@ mixin template Channel( Message )
 }
 
 /// Round robin output channel
-struct Output( Message )
+struct Output(Message)
 {
 	alias Complement = Input;
 
 	mixin Channel!Message;
 
 	/// No more messages can be transferred now
-	auto available( )
+	auto available()
 	{
 		ptrdiff_t available = -1;
-		if( this.queues.length == 0 ) return available;
+		if (this.queues.length == 0)
+			return available;
 
 		auto start = this.current;
-		do {
-			auto queue = this.queues[ this.current ];
-			
-			if( !queue.closed ) {
+		do
+		{
+			auto queue = this.queues[this.current];
+
+			if (!queue.closed)
+			{
 				available = queue.available;
-				if( available > 0 ) return available;
+				if (available > 0)
+					return available;
 			}
 
-			this.current = ( this.current + 1 ) % this.queues.length;
-		} while( this.current != start );
+			this.current = (this.current + 1) % this.queues.length;
+		}
+		while (this.current != start);
 
 		return available;
 	}
 
 	/// Put message to current non full Queue and switch Queue
-	Value put( Value )( Value value )
+	Value put(Value)(Value value)
 	{
-		auto available = await( this.available );
-		if( available == -1 ) return value;
+		auto available = await(this.available);
+		if (available == -1)
+			return value;
 
-		auto message = this.queues[ this.current ].put( value );
-		this.current = ( this.current + 1 ) % this.queues.length;
+		auto message = this.queues[this.current].put(value);
+		this.current = (this.current + 1) % this.queues.length;
 		return message;
 	}
 }
 
 /// Round robin input channel
-struct Input( Message )
+struct Input(Message)
 {
 	alias Complement = Output;
 
 	mixin Channel!Message;
 
 	/// Minimum count of pending messages
-	auto pending( )
+	auto pending()
 	{
 		ptrdiff_t pending = -1;
-		if( this.queues.length == 0 ) return pending;
+		if (this.queues.length == 0)
+			return pending;
 
 		auto start = this.current;
-		do {
-			auto queue = this.queues[ this.current ];
+		do
+		{
+			auto queue = this.queues[this.current];
 
 			auto pending2 = queue.pending;
-			if( pending2 > 0 ) return pending2;
+			if (pending2 > 0)
+				return pending2;
 
-			if( !queue.closed ) pending = 0;
-			
-			this.current = ( this.current + 1 ) % this.queues.length;
-		} while( this.current != start );
+			if (!queue.closed)
+				pending = 0;
+
+			this.current = (this.current + 1) % this.queues.length;
+		}
+		while (this.current != start);
 
 		return pending;
 	}
 
-	auto empty( )
+	auto empty()
 	{
 		return this.pending == -1;
 	}
 
 	/// Get message at tail of current non clear Queue or wait
-	auto front( )
+	auto front()
 	{
-		auto pending = await( this.pending );
-		enforce( pending != -1 , "Can not get front from closed channel" );
+		auto pending = await(this.pending);
+		enforce(pending != -1, "Can not get front from closed channel");
 
-		return this.queues[ this.current ].front;
+		return this.queues[this.current].front;
 	}
 
 	/// Remove message from tail of current Queue and switch to another Queue
-	void popFront( )
+	void popFront()
 	{
-		this.queues[ this.current ].popFront;
-		this.current = ( this.current + 1 ) % this.queues.length;
+		this.queues[this.current].popFront;
+		this.current = (this.current + 1) % this.queues.length;
 	}
 
-	int opApply( int delegate( Message ) proceed )
-    {
-        for(;;)
-        {
-			auto pending = await( this.pending );
-			if( pending == -1 ) return 0;
+	int opApply(int delegate(Message) proceed)
+	{
+		for (;;)
+		{
+			auto pending = await(this.pending);
+			if (pending == -1)
+				return 0;
 
-			if( auto result = proceed( this.next ) ) return result;
-        }
+			if (auto result = proceed(this.next))
+				return result;
+		}
 	}
 
 	auto opSlice()
 	{
 		Message[] list;
-		foreach( msg ; this ) list ~= msg;
+		foreach (msg; this)
+			list ~= msg;
 		return list;
 	}
 
 }
 
-
-
 /// Bidirection : start , put*2 , take
 unittest
 {
-	static void summing( Output!int sums , Input!int feed )
+	static void summing(Output!int sums, Input!int feed)
 	{
 		sums.next = feed.next + feed.next;
 	}
 
 	Output!int feed;
 	Input!int sums;
-	go!summing( sums.make , feed.make );
+	go!summing(sums.make, feed.make);
 
 	feed.next = 3;
 	feed.next = 4;
 
-	sums.next.assertEq( 3 + 4 );
+	sums.next.assertEq(3 + 4);
 }
 
 /+

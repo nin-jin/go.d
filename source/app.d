@@ -1,9 +1,13 @@
-import std.datetime;
+import std.datetime.stopwatch;
 import std.algorithm;
+import std.algorithm.iteration;
+import std.parallelism;
 import std.range;
 import std.stdio;
 import std.typecons;
+
 import jin.go;
+import core.stdc.stdlib;
 
 enum long iterations = 1000;
 enum long threads = 1000;
@@ -15,12 +19,16 @@ auto produce()
 
 auto consume( Output!long sums , Input!long numbers )
 {
+	// write('[');
 	long s;
-	foreach( n ; numbers ) s += n;
+	foreach( n ; numbers ) {
+		s += n;
+	}
 	sums.next = s;
+	// write(']');
 }
 
-auto testing( )
+void main()
 {
 	auto timer = StopWatch( AutoStart.yes );
 
@@ -29,21 +37,12 @@ auto testing( )
 		go!consume( sums.make(1) , go!produce );
 	}
 
-	long sumsums;
-	foreach( sum ; sums ) sumsums += sum;
+	long sumsums = 0;
+	foreach( s; sums) sumsums += s;
 
 	timer.stop();
 
 	writeln( "Workers\tResult\t\tTime" );
-	writeln( workerCount , "\t" , sumsums , "\t" , timer.peek.msecs , "ms" );
+	writeln( taskPool.size , "\t" , sumsums , "\t" , timer.peek.total!"msecs", " ms" );
 
-	core.stdc.stdlib.exit(0);
 }
-
-void main( )
-{
-	go!testing;
-	startWorking;
-}
-
-
