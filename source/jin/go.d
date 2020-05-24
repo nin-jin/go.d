@@ -159,14 +159,14 @@ class Queue(Message)
 	/// No more messages will be produced
 	bool closed;
 
-	/// Offset of first not received message
-	shared size_t tail;
+	/// Offset of next free slot for message
+	shared size_t head;
 
 	/// Cyclic buffer of transferring messages
 	Message[] messages;
 
-	/// Offset of next free slot for message
-	shared size_t head;
+	/// Offset of first not received message
+	shared size_t tail;
 
 	/// Limit Queue to 8192B by default
 	this(int size = ( 8192 - Queue.sizeof ) / Message.sizeof)
