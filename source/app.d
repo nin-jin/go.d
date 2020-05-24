@@ -35,7 +35,7 @@ void benchmark()
 
 	Input!long sums;
 	foreach( i ; threads.iota ) {
-		go!consume( sums.make(1) , go!produce );
+		go!consume( sums.pair(1) , go!produce );
 	}
 
 	long sumsums = 0;

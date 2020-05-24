@@ -123,7 +123,7 @@ auto go(alias func, Args...)(auto ref Args args)
 		func(args).copy(&future);
 	}
 
-	go!wrapper( future.make , &func , args);
+	go!wrapper( future.pair , &func , args);
 
 	return future.release;
 }
@@ -133,7 +133,7 @@ auto go( alias task , Args... )( auto ref Args args )
 if( ( Parameters!task.length == Args.length + 1 )&&( is( Parameters!task[0] == Output!Message , Message ) ) )
 {
 	Parameters!task[0] results;
-	auto future = results.make;
+	auto future = results.pair;
 	go!task( results , args );
 	return future;
 }
@@ -244,8 +244,8 @@ mixin template Channel(Message)
 	/// Offset of current Queue
 	private size_t current;
 
-	/// Make new registered Queue
-	auto make(Args...)(Args args)
+	/// Make new registered Queue and returns Complement
+	auto pair(Args...)(Args args)
 	{
 		auto queue = new Queue!Message(args);
 		this.queues ~= queue;
@@ -379,7 +379,7 @@ struct Input(Message)
 	auto front()
 	{
 		auto pending = await(this.pending);
-		enforce(pending != -1, "Can not get front from empty closed channel");
+		enforce(pending > 0 , "Can not get front from empty closed channel");
 
 		return this.queues[this.current].front;
 	}
@@ -424,7 +424,7 @@ unittest
 
 	Output!int feed;
 	Input!int sums;
-	go!summing(sums.make, feed.make);
+	go!summing(sums.pair, feed.pair);
 
 	feed.next = 3;
 	feed.next = 4;
@@ -441,13 +441,13 @@ unittest
 	}
 
 	Output!int feed;
-	auto ifeed = feed.make;
+	auto ifeed = feed.pair;
 	feed.next = 3;
 	feed.next = 4;
 	feed.end;
 
 	Input!int sums;
-	go!summing( sums.make , ifeed );
+	go!summing( sums.pair , ifeed );
 
 	sums.next.assertEq( 3 + 4 );
 }
@@ -463,8 +463,8 @@ unittest
 		sums.next = feed.next + feed.next;
 	}
 
-	go!summing( sums.make , feed.make );
-	go!summing( sums.make , feed.make );
+	go!summing( sums.pair , feed.pair );
+	go!summing( sums.pair , feed.pair );
 	
 	feed.next = 3; // 1
 	feed.next = 4; // 2
@@ -554,7 +554,7 @@ unittest
 	import jin.go;
 
 	Output!int output;
-	auto input = output.make;
+	auto input = output.pair;
 	output.next = 1;
 	output.next = 2;
 	input.next.assertEq( 1 );
@@ -563,7 +563,7 @@ unittest
 
 /// https://tour.golang.org/concurrency/2
 /// Inputs is round robin input Queue list with InputRange and Queue interfaces support.
-/// Method "make" creates new Queue for every coroutine
+/// Method "pair" creates new Queue for every coroutine
 unittest
 {
 	import std.algorithm;
@@ -577,8 +577,8 @@ unittest
 	immutable int[] numbers = [ 7 , 2 , 8 , -9 , 4 , 0 ];
 
 	Input!int sums;
-	go!summing( sums.make(1) , numbers[ 0 .. $/2 ] );
-	go!summing( sums.make(1) , numbers[ $/2 .. $ ] );
+	go!summing( sums.pair(1) , numbers[ 0 .. $/2 ] );
+	go!summing( sums.pair(1) , numbers[ $/2 .. $ ] );
 	auto res = (&sums).take(2).array;
 
 	( res ~ res.sum ).sort.assertEq([ -5 , 12 , 17 ]);
@@ -599,9 +599,9 @@ unittest
 	}
 
 	Input!int numbers;
-	go!fibonacci( numbers.make(10) , 10 );
+	go!fibonacci( numbers.pair(10) , 10 );
 
-	numbers.release.array.assertEq([ 0 , 1 , 1 , 2 , 3 , 5 , 8 , 13 , 21 , 34 ]);
+	numbers[].assertEq([ 0 , 1 , 1 , 2 , 3 , 5 , 8 , 13 , 21 , 34 ]);
 }
 
 /// https://tour.golang.org/concurrency/4
@@ -649,7 +649,7 @@ unittest
 	Output!int numbers;
 	Input!bool controls;
 
-	go!printing( controls.make(1) , numbers.make(1) );
+	go!printing( controls.pair(1) , numbers.pair(1) );
 	go!fibonacci( numbers );
 
 	await( controls.pending );

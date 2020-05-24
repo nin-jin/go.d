@@ -55,8 +55,8 @@ struct Data { int val }
 struct End {}
 alias Algebraic!(Data,End) Message 
 Input!Message messages_input;
-auto messages_output = messages_input.make;
-auto messages_input2 = messages_output.make;
+auto messages_output = messages_input.pair;
+auto messages_input2 = messages_output.pair;
 
 Inputs!int ints_in;
 Outputs!int ints_out;
@@ -70,8 +70,8 @@ void incrementing( Output!int ints_out , Input!int ints_in ) {
 	}
 }
 
-go!incrementing( ints_in.make , ints_out.make );
-auto ints_in = go!incrementing( ints_out.make ); // ditto
+go!incrementing( ints_in.pair , ints_out.pair );
+auto ints_in = go!incrementing( ints_out.pair ); // ditto
 
 auto squaring( int limit ) {
 	return limit.iota.map( i => i^^2 );

@@ -1,6 +1,7 @@
 -*
 _*
-.*
+.git
+.dub
 docs.json
 __dummy.html
 *.o
