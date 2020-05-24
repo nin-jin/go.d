@@ -15,6 +15,7 @@ import std.variant;
 import std.string;
 import des.ts;
 
+/// Binds args to delegate that calls function with moving args to it.
 auto delegateWithMovedArgs(CALLABLE, ARGS...)(auto ref CALLABLE callable, ref ARGS args)
 {
 	struct TARGS
@@ -50,7 +51,7 @@ auto delegateWithMovedArgs(CALLABLE, ARGS...)(auto ref CALLABLE callable, ref AR
 	{
 		import std.string : format;
 
-		string ret = func ~ "(";
+		string ret = "return " ~ func ~ "(";
 		foreach (i, T; ARGS)
 		{
 			if (i > 0)
@@ -68,7 +69,7 @@ auto delegateWithMovedArgs(CALLABLE, ARGS...)(auto ref CALLABLE callable, ref AR
 	};
 }
 
-/// Yields until condition is `0`.
+/// Yields while condition is `0`.
 auto await(Result)(lazy Result check)
 {
 	for (;;)
@@ -82,9 +83,10 @@ auto await(Result)(lazy Result check)
 	}
 }
 
-template SafeToTransfer(Value)
+/// Safe to transfer between threads: shared, immutable, non-copiable
+template IsSafeToTransfer(Value)
 {
-	enum SafeToTransfer = !hasUnsharedAliasing!Value || !__traits(compiles, {
+	enum IsSafeToTransfer = !hasUnsharedAliasing!Value || !__traits(compiles, {
 			Value x, y = x;
 		});
 }
@@ -95,7 +97,7 @@ auto go(alias func, Args...)(auto ref Args args)
 {
 	foreach (i, Arg; Args)
 	{
-		static assert(SafeToTransfer!Arg,
+		static assert(IsSafeToTransfer!Arg,
 				"Value of type (" ~ Arg.stringof
 				~ ") is not safe to pass between threads. Make it immutable or shared!");
 	}
@@ -126,7 +128,6 @@ auto go(alias func, Args...)(auto ref Args args)
 	return future.release;
 }
 
-/+
 /// Run function with autocreated result Queue and return this Queue
 auto go( alias task , Args... )( auto ref Args args )
 if( ( Parameters!task.length == Args.length + 1 )&&( is( Parameters!task[0] == Output!Message , Message ) ) )
@@ -136,7 +137,7 @@ if( ( Parameters!task.length == Args.length + 1 )&&( is( Parameters!task[0] == O
 	go!task( results , args );
 	return future;
 }
-+/
+
 /// Cut and return head from input range;
 auto next(Range)(auto ref Range range) if (isInputRange!Range)
 {
@@ -167,8 +168,8 @@ class Queue(Message)
 	/// Offset of next free slot for message
 	shared size_t head;
 
-	/// Limit Queue to 1048B by default
-	this(int size = 1024 / Message.sizeof)
+	/// Limit Queue to 8192B by default
+	this(int size = ( 8192 - Queue.sizeof ) / Message.sizeof)
 	{
 		enforce(size > 0, "Queue size must be greater then 0");
 
@@ -328,8 +329,7 @@ struct Output(Message)
 	Value put(Value)(Value value)
 	{
 		auto available = await(this.available);
-		if (available == -1)
-			return value;
+		enforce(available != -1, "Can not put to empty Output");
 
 		auto message = this.queues[this.current].put(value);
 		this.current = (this.current + 1) % this.queues.length;
@@ -379,7 +379,7 @@ struct Input(Message)
 	auto front()
 	{
 		auto pending = await(this.pending);
-		enforce(pending != -1, "Can not get front from closed channel");
+		enforce(pending != -1, "Can not get front from empty closed channel");
 
 		return this.queues[this.current].front;
 	}
@@ -428,11 +428,10 @@ unittest
 
 	feed.next = 3;
 	feed.next = 4;
-
 	sums.next.assertEq(3 + 4);
 }
 
-/+
+
 /// Bidirection : put*2 , start , take
 unittest
 {
@@ -445,15 +444,16 @@ unittest
 	auto ifeed = feed.make;
 	feed.next = 3;
 	feed.next = 4;
+	feed.end;
 
 	Input!int sums;
 	go!summing( sums.make , ifeed );
 
 	sums.next.assertEq( 3 + 4 );
-}+/
+}
 
 /// Round robin : start*2 , put*4 , take*2
-/+unittest
+unittest
 {
 	Output!int feed;
 	Input!int sums;
@@ -472,8 +472,8 @@ unittest
 	feed.next = 6; // 2
 
 	sums[].sort().assertEq([ 3 + 5 , 4 + 6 ]);
-}+/
-/+
+}
+
 /// Event loop on multiple queues
 unittest
 {
@@ -495,32 +495,30 @@ unittest
 	int[] results1;
 	long[] results2;
 
-	cycle : for(;;) {
-		switch( select( input1 , input2 ) ) {
-			case input1 : results1 ~= input1.next; break;
-			case input2 : results2 ~= input2.next; break;
-			default : break cycle;
-		}
+	for(;;) {
+		if( !numbs1.empty ) { results1 ~= numbs1.next; continue; }
+		if( !numbs2.empty ) { results2 ~= numbs2.next; continue; }
+		break;
 	}
 
 	results1.assertEq([ 2 , 3 ]);
 	results2.assertEq([ 4 , 5 ]);
 }
-+/
+
 /// Blocking on buffer overflow
-/+unittest
+unittest
 {
 	static auto generating( ) {
 		return 1.repeat.take( 200 );
 	}
 
 	auto numbs = go!generating;
-	sleep( 10.msecs );
+	Thread.sleep( 10.msecs );
 
 	numbs[].sum.assertEq( 200 );
-}+/
+}
 
-/+
+
 /// https://tour.golang.org/concurrency/1
 /// "go" template starts function in new asynchronous coroutine
 /// Coroutines starts in thread pool and may be executed in parallel threads.
@@ -536,13 +534,13 @@ unittest
 	static void saying( string message )
 	{
 		foreach( _ ; 3.iota ) {
-			sleep( 100.msecs );
+			Thread.sleep( 100.msecs );
 			log ~= message;
 		}
 	}
 
 	go!saying( "hello" );
-	sleep( 50.msecs );
+	Thread.sleep( 50.msecs );
 	saying( "world" );
 
 	log.assertEq([ "hello" , "world" , "hello" , "world" , "hello" , "world" ]);
@@ -556,7 +554,7 @@ unittest
 	import jin.go;
 
 	Output!int output;
-	auto input = output.output;
+	auto input = output.make;
 	output.next = 1;
 	output.next = 2;
 	input.next.assertEq( 1 );
@@ -579,11 +577,11 @@ unittest
 	immutable int[] numbers = [ 7 , 2 , 8 , -9 , 4 , 0 ];
 
 	Input!int sums;
-	go!summing( sums.input(1) , numbers[ 0 .. $/2 ] );
-	go!summing( sums.input(1) , numbers[ $/2 .. $ ] );
-	auto res = sums.take(2).array;
+	go!summing( sums.make(1) , numbers[ 0 .. $/2 ] );
+	go!summing( sums.make(1) , numbers[ $/2 .. $ ] );
+	auto res = (&sums).take(2).array;
 
-	( res ~ res.sum ).assertEq([ 17 , -5 , 12 ]);
+	( res ~ res.sum ).sort.assertEq([ -5 , 12 , 17 ]);
 }
 
 /// https://tour.golang.org/concurrency/4
@@ -601,9 +599,9 @@ unittest
 	}
 
 	Input!int numbers;
-	go!fibonacci( numbers.input , numbers.size );
+	go!fibonacci( numbers.make(10) , 10 );
 
-	numbers.array.assertEq([ 0 , 1 , 1 , 2 , 3 , 5 , 8 , 13 , 21 , 34 ]);
+	numbers.release.array.assertEq([ 0 , 1 , 1 , 2 , 3 , 5 , 8 , 13 , 21 , 34 ]);
 }
 
 /// https://tour.golang.org/concurrency/4
@@ -633,36 +631,32 @@ unittest
 
 	__gshared int[] log;
 
-	static auto fibonacci( Output!int numbers , Input!bool controls )
+	static auto fibonacci( Output!int numbers )
 	{
 		auto range = recurrence!q{ a[n-1] + a[n-2] }( 0 , 1 );
 
-		foreach( channel ; select( numbers , controls ) ) {
-			switch( channel ) {
-				case numbers : numbers.next = range.next; break;
-				case controls : break cycle;
-			}
+		while( numbers.available >= 0 ) {
+			numbers.next = range.next;
 		}
 
-		log ~= -1;
 	}
 
-	static void printing( Output!bool control , Input!int numbers )
+	static void printing( Output!bool controls , Input!int numbers )
 	{
 		foreach( i ; 10.iota ) log ~= numbers.next;
 	}
 
-	auto numbers = Input!int(1);
-	auto control = Input!bool(1);
+	Output!int numbers;
+	Input!bool controls;
 
-	go!printing( control.input , numbers );
-	go!fibonacci( numbers.input , control );
+	go!printing( controls.make(1) , numbers.make(1) );
+	go!fibonacci( numbers );
 
-	sleep( 1.msecs );
+	await( controls.pending );
 
-	log.assertEq([ 0 , 1 , 1 , 2 , 3 , 5 , 8 , 13 , 21 , 34 , -1 ]);
+	log.assertEq([ 0 , 1 , 1 , 2 , 3 , 5 , 8 , 13 , 21 , 34 ]);
 }
-
+/+
 /// https://tour.golang.org/concurrency/6
 /// You can ommit first argument of Queue type, and it will be autogenerated and returned.
 unittest
@@ -670,16 +664,16 @@ unittest
 	import core.time;
 	import jin.go;
 
-	static auto after( output!bool signals , Duration dur )
+	static auto after( ref Output!bool signals , Duration dur )
 	{
-		sleep( dur );
+		Thread.sleep( dur );
 		signals.next = true;
-		return !signals.closed;
+		return signals.available >= 0;
 	}
 
-	static auto tick( Queue!bool signals , Duration dur )
+	static auto tick( Output!bool signals , Duration dur )
 	{
-		while( after( signals , dur ) );
+		while( after( signals , dur ) ) {}
 	}
 
 	auto ticks = go!tick( 101.msecs );
@@ -687,24 +681,23 @@ unittest
 
 	string log;
 
-	cycle : for(;;) {
-		switch( select( ticks , booms ) ) {
-			case ticks :
-				log ~= "tick";
-				ticks.popFront;
-				break;
-			case booms :
-				log ~= "BOOM!";
-				break cycle;
-			default :
-				log ~= ".";
-				sleep( 51.msecs );
+	for(;;) {
+		if( ticks.pending > 0 ) {
+			log ~= "tick";
+			ticks.popFront;
+			continue;
 		}
+		if( booms.pending > 0 ) {
+			log ~= "BOOM!";
+			break;
+		}
+		log ~= ".";
+		Thread.sleep( 51.msecs );
 	}
 
 	while( booms.clear )
 	{
-		while( !ticks.clear ) {
+		while( !ticks.empty ) {
 			log ~= "tick";
 			ticks.popFront;
 		}
@@ -712,7 +705,7 @@ unittest
 
 	log.assertEq( "..tick..tick..tick..tick..BOOM!" );
 }
-/+
+
 /// https://tour.golang.org/concurrency/9
 unittest
 {
@@ -752,9 +745,8 @@ unittest
 		go!working( i );
 	}
 
-	sleep( 1.seconds );
+	Thread.sleep( 1.seconds );
 
 	counter["somekey"].assertEq( 1000 );
 }
-+/
 +/

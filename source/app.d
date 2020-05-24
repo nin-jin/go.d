@@ -5,6 +5,9 @@ import std.parallelism;
 import std.range;
 import std.stdio;
 import std.typecons;
+import std.concurrency;
+import std.parallelism;
+import core.thread;
 
 import jin.go;
 import core.stdc.stdlib;
@@ -19,16 +22,14 @@ auto produce()
 
 auto consume( Output!long sums , Input!long numbers )
 {
-	// write('[');
 	long s;
 	foreach( n ; numbers ) {
 		s += n;
 	}
 	sums.next = s;
-	// write(']');
 }
 
-void main()
+void benchmark()
 {
 	auto timer = StopWatch( AutoStart.yes );
 
@@ -38,11 +39,18 @@ void main()
 	}
 
 	long sumsums = 0;
-	foreach( s; sums) sumsums += s;
+	foreach( s; sums) {
+		sumsums += s;
+	}
 
 	timer.stop();
 
 	writeln( "Workers\tResult\t\tTime" );
 	writeln( taskPool.size , "\t" , sumsums , "\t" , timer.peek.total!"msecs", " ms" );
 
+}
+
+void main()
+{
+	go!benchmark().workForce();
 }

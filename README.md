@@ -2,19 +2,32 @@
 
 Thread-pooled coroutines with [wait-free](https://en.wikipedia.org/wiki/Non-blocking_algorithm#Wait-freedom) staticaly typed communication channels
 
-[![Build Status](https://travis-ci.org/nin-jin/go.d.svg?branch=master)](https://travis-ci.org/nin-jin/go.d)
-[![Join the chat at https://gitter.im/nin-jin/go.d](https://badges.gitter.im/nin-jin/go.d.svg)](https://gitter.im/nin-jin/go.d?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-
 # Features
 
-* Static typed channels
-* Lock free channels
-* Minimal message size
+* Static typed channels (but you can use Algebraic to transfer various data).
+* Minimal message size (no additional memory cost).
+* Wait free channels (but if you don't check for avalability you wil be spinlocked).
+* Static check for message transition safety (allowed only shared, immutable and non-copiable).
+* Every goroutine runs on thread poll.
 
 # ToDo
 
-* Allow only one input and output ref
-* Autoclose channels
+* Fibers support (Should be used Fiber.yield instead of spinlock).
+* Main thread usage (It is spinlocking now).
+
+# Benchmarks
+
+```
+> .\compare.cmd
+
+>go run app.go --release
+Workers Result          Time
+4       499500000       27.9226ms
+
+>dub --quiet --build=release
+Workers Result          Time
+3       499500000       64 ms
+```
 
 # Usage
 
@@ -26,6 +39,8 @@ dub.json:
 	}
 }
 ```
+
+[Actual examples in unit tests](./source/jin/go.d)
 
 ## Import
 ```d
@@ -39,30 +54,29 @@ auto ints = new Channel!int;
 struct Data { int val }
 struct End {}
 alias Algebraic!(Data,End) Message 
-auto messages = new Channel!Message;
+Input!Message messages_input;
+auto messages_output = messages_input.make;
+auto messages_input2 = messages_output.make;
 
-Inputs!int ints;
-auto channel = ints.make;
-
-Outputs!int ints;
-auto channel = ints.make;
+Inputs!int ints_in;
+Outputs!int ints_out;
 ```
 
 ## Start coroutines
 ```d
-void incrementing( Channel!int results , Channel!int inputs ) {
-	while( true ) {
-		results.next = inputs.next + 1;
+void incrementing( Output!int ints_out , Input!int ints_in ) {
+	while( ints_out.available >= 0 ) {
+		ints_out.next = ints_in.next + 1;
 	}
 }
 
-go!incrementing( results.make , ints.make );
-auto results = go!incrementing( ints.make );
+go!incrementing( ints_in.make , ints_out.make );
+auto ints_in = go!incrementing( ints_out.make ); // ditto
 
-void squaring( int limit ) {
+auto squaring( int limit ) {
 	return limit.iota.map( i => i^^2 );
 }
-auto squares = go!squaring( 10 );
+auto squares_in = go!squaring( 10 );
 ```
 
 ## Send messages
@@ -87,17 +101,19 @@ results.next.visit!(
 
 // handle messages in cycle
 while( !results.empty ) {
-	if( !results.clear ) writeln( results.next );
+	if( results.pending > 0 ) writeln( results.next );
 };
 
 // handle messages from multiple channels in cycle
 while( !one.empty || !two.empty ) {
-	if( !one.clear ) writeln( one.next );
-	if( !two.clear ) writeln( two.next );
+	if( one.pending > 0 ) writeln( one.next );
+	if( two.pending > 0 ) writeln( two.next );
 }
 ```
  
 # Complete example
+
+**currently broken**
 
 ```d
 import core.time;
@@ -133,5 +149,3 @@ void main(){
 	writeln( "BOOM!" );
 }
 ```
-
-[More examples in unit tests](./source/jin/go.d)
