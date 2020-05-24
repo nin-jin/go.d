@@ -1,0 +1,29 @@
+name: test
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+    test:
+        name: Dub Tests
+        strategy:
+            matrix:
+                os: [ubuntu-latest, windows-latest, macOS-latest]
+                dc: [dmd-latest, ldc-latest]
+            exclude:
+                - { os: macOS-latest, dc: dmd-2.085.0 }
+
+        runs-on: ${{ matrix.os }}
+        steps:
+            - uses: actions/checkout@v2
+
+            - name: Install D compiler
+              uses: mihails-strasuns/setup-dlang@v0.5.0
+              with:
+                  compiler: ${{ matrix.dc }}
+
+            - name: Run tests
+              run: dub -q test
