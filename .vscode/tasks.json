@@ -2,33 +2,20 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "Build",
 			"type": "dub",
 			"run": false,
 			"compiler": "dmd",
 			"archType": "x86_64",
-			"buildType": "debug",
+			"buildType": "unittest",
 			"configuration": "application",
 			"problemMatcher": [
 				"$dmd"
 			],
-			"group": "build",
-			"label": "dub build",
-			"detail": "dub build --compiler=dmd -a=x86_64 -b=debug -c=application"
-		},
-		{
-			"type": "dub",
-			"run": false,
-			"compiler": "dmd",
-			"archType": "x86_64",
-			"buildType": "debug",
-			"configuration": "library",
-			"problemMatcher": [
-				"$dmd"
-			],
-			"test": true,
-			"group": "build",
-			"label": "dub test",
-			"detail": "dub test --compiler=dmd -a=x86_64 -b=debug -c=library"
+			"presentation": {
+				"reveal": "silent",
+			},
+			"group": "test"
 		}
 	]
 }

@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug",
+            "name": "Run",
             "type": "cppvsdbg",
             "request": "launch",
             "program": "jin-go.exe",
@@ -14,18 +14,12 @@
             "cwd": "${workspaceFolder}",
             "environment": [],
             "externalConsole": false,
-            "preLaunchTask": "dub build"
-        },
-        {
-            "name": "Debug Test",
-            "type": "cppvsdbg",
-            "request": "launch",
-            "program": "jin-go-test-library.exe",
-            "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
-            "environment": [],
-            "externalConsole": false
+            "presentation": {
+                "hidden": false,
+                "group": "test",
+                "order": 1
+            },
+            "preLaunchTask": "Build"
         }
     ]
 }
