@@ -266,13 +266,13 @@ unittest
 	{
 		foreach (_; 3.iota)
 		{
-			Thread.sleep(100.msecs);
+			Thread.sleep(200.msecs);
 			log ~= message;
 		}
 	}
 
 	go!saying("hello");
-	Thread.sleep(50.msecs);
+	Thread.sleep(100.msecs);
 	saying("world");
 
 	log.assertEq(["hello", "world", "hello", "world", "hello", "world"]);
