@@ -38,10 +38,7 @@ void benchmark()
 		go!consume( sums.pair(1) , go!produce );
 	}
 
-	long sumsums = 0;
-	foreach( s; sums) {
-		sumsums += s;
-	}
+	long sumsums = sums[].sum;
 
 	timer.stop();
 
