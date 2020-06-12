@@ -266,7 +266,7 @@ unittest
 	{
 		foreach (_; 3.iota)
 		{
-			Thread.sleep(100.msecs);
+			Thread.sleep(200.msecs);
 			log ~= message;
 		}
 	}
