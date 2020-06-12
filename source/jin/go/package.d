@@ -272,7 +272,7 @@ unittest
 	}
 
 	go!saying("hello");
-	Thread.sleep(190.msecs);
+	Thread.sleep(150.msecs);
 	saying("world");
 
 	log.assertEq(["hello", "world", "hello", "world", "hello", "world"]);
