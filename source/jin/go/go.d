@@ -366,6 +366,11 @@ unittest
             ticks.popFront;
             continue;
         }
+        if (booms.pending > 0)
+        {
+            log ~= "BOOM!";
+            break;
+        }
         10.msecs.sleep;
     }
 
