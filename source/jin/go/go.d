@@ -148,19 +148,17 @@ unittest
     int[] results1;
     long[] results2;
 
-    for (;;)
+    while (!numbs1.empty || !numbs2.empty)
     {
-        if (!numbs1.empty)
+        if (numbs1.pending > 0)
         {
             results1 ~= numbs1.next;
-            continue;
         }
-        if (!numbs2.empty)
+        if (numbs2.pending > 0)
         {
             results2 ~= numbs2.next;
             continue;
         }
-        break;
     }
 
     results1.assertEq([2, 3]);
