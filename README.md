@@ -94,7 +94,7 @@ while( !its_out.ignore ) {
 
 ## Consume messages
 
-```
+```d
 // Wait for any message in inbox/inboxes
 writeln( messages_input.next ); // take one message
 writeln( messages_input.next.get!Data ); // take value from one Message
@@ -126,32 +126,37 @@ import core.time;
 import std.stdio;
 import jin.go;
 
-static auto after( Channel!bool channel , Duration dur )
+static void after(Output!bool signals, Duration dur)
 {
-	sleep( dur );
-	if( !channel.closed ) channel.next = true;
+	dur.sleep;
+	signals.put(true);
 }
 
-static auto tick( Channel!bool channel , Duration dur )
+static auto tick(Output!bool signals, Duration dur)
 {
-	while( !channel.closed ) after( channel , dur );
-}
-
-void main(){
-	auto ticks = go!tick( 101.msecs );
-	auto booms = go!after( 501.msecs );
-
-	string log;
-
-	while( booms.clear )
+	while (signals.available >= 0)
 	{
-		while( !ticks.clear ) {
-			writeln( "tick" );
-			ticks.popFront;
-		}
-		writeln( "." );
-		sleep( 51.msecs );
+		dur.sleep;
+		signals.put(true);
 	}
-	writeln( "BOOM!" );
+}
+
+auto ticks = go!tick(100.msecs);
+auto booms = go!after(450.msecs);
+
+for (;;)
+{
+	if (ticks.pending > 0)
+	{
+		write( "tick," );
+		ticks.popFront;
+		continue;
+	}
+	if (booms.pending > 0)
+	{
+		writeln( "BOOM!" );
+		break;
+	}
+	10.msecs.sleep;
 }
 ```
