@@ -371,7 +371,7 @@ unittest
             ticks.popFront;
             continue;
         }
-        51.msecs.sleep;
+        10.msecs.sleep;
     }
 
     log.assertEq("tick,tick,tick,tick,BOOM!");
