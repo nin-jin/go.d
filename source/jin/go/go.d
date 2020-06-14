@@ -354,7 +354,7 @@ unittest
     }
 
     auto ticks = go!tick(100.msecs);
-    auto booms = go!after(490.msecs);
+    auto booms = go!after(450.msecs);
 
     string log;
 
@@ -365,11 +365,6 @@ unittest
             log ~= "tick,";
             ticks.popFront;
             continue;
-        }
-        if (booms.pending > 0)
-        {
-            log ~= "BOOM!";
-            break;
         }
         10.msecs.sleep;
     }
