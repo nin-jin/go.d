@@ -133,6 +133,12 @@ align(cache_line_size) class Queue(Message)
 		const offset = (this.consumer.offset + 1) % this.messages.length;
 		atomicStore!release(this.consumer.offset, offset);
 	}
+
+    /// True when no more messages will be consumed.
+    bool ignore()
+    {
+        return this.available == -1;
+    }
 }
 
 /// Automatic fit buffer size to memory page size.

@@ -1,5 +1,7 @@
 module jin.go.await;
 
+import vibe.core.core;
+
 /// Yields while condition is `0`.
 auto await(Result)(lazy Result check)
 {
@@ -12,6 +14,6 @@ auto await(Result)(lazy Result check)
             return value;
         }
         
-        //Fiber.yield;
+        yield;
     }
 }

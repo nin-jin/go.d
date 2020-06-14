@@ -6,15 +6,15 @@ import (
 	"runtime"
 )
 
-func produce(ints chan<- int) {
-	for j := 0; j < 1000; j++ {
+func produce(ints chan<- int64) {
+	for j := int64(0); j < 10000; j++ {
 		ints <- j
 	}
 	close(ints)
 }
 
-func consume(ints <-chan int, sums chan<- int) {
-	sum := 0
+func consume(ints <-chan int64, sums chan<- int64) {
+	sum := int64(0)
 	for i := range ints {
 		sum += i
 	}
@@ -22,19 +22,19 @@ func consume(ints <-chan int, sums chan<- int) {
 }
 
 func main() {
-	threads := 1000
+	threads := 100
 
 	t0 := time.Now()
 
-	sums := make(chan int, threads)
+	sums := make(chan int64, threads)
 
 	for i := 0; i < threads; i++ {
-		ints := make(chan int, 100)
+		ints := make(chan int64, 100)
 		go produce(ints)
 		go consume(ints, sums)
 	}
 
-	sumsums := 0
+	sumsums := int64(0)
 	for i := 0; i < threads; i++ {
 		sumsums += <- sums
 	}

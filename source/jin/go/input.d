@@ -74,6 +74,14 @@ struct Input(Message)
         this.current = (current + 1) % this.queues.length;
     }
 
+    /// Consumes current message;
+    Message next()
+    {
+        auto value = this.front;
+        this.popFront;
+        return value;
+    }
+
     /// Iterates over all messages.
     /// Example: `foreach(msg : chan) {...}`
     int opApply(int delegate(Message) proceed)

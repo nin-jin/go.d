@@ -47,6 +47,12 @@ struct Output(Message)
         return available;
     }
 
+    /// True when no more messages will be consumed.
+    bool ignore()
+    {
+        return this.available == -1;
+    }
+
     /// Put message to current non full Queue and switch Queue
     /// `available` must be checked before.
     void put(Value)(Value value)

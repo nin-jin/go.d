@@ -5,6 +5,7 @@
   "license" : "public domain",
   "authors": [ "jin" ],
   "dependencies": {
+    "vibe-core": "1.9.2",
     "dests": "0.3.1"
   }
 }

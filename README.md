@@ -4,16 +4,12 @@ Thread-pooled coroutines with [wait-free](https://en.wikipedia.org/wiki/Non-bloc
 
 # Features
 
-* Static typed channels (but you can use Algebraic to transfer various data).
+* Static typed channels (but you can use [std.variant](https://dlang.org/library/std/variant.html) to transfer various data).
 * Minimal message size (no additional memory cost).
-* Wait free channels (but if you don't check for avalability you wil be spinlocked).
-* Static check for message transition safety (allowed only shared, immutable and non-copiable).
-* Every goroutine runs on thread poll.
-
-# ToDo
-
-* Fibers support (Should be used Fiber.yield instead of spinlock).
-* Main thread usage (It is spinlocking now).
+* Wait free channels (but if you don't check for avalability/pending you will be locked).
+* Static check for message transition safety (allowed only shared, immutable and non-copyable).
+* Every goroutine runs on thread poll (use runEventLoopOnce to use main thread too).
+* Automatic finalizing queues on channel scope exit (use `empty`/`ignore` to check it).
 
 # Benchmarks
 
@@ -22,12 +18,13 @@ Thread-pooled coroutines with [wait-free](https://en.wikipedia.org/wiki/Non-bloc
 
 >go run app.go --release
 Workers Result          Time
-4       499500000       27.9226ms
-
->dub --quiet --build=release
+4       4999500000      25.9163ms
+C:\proj\go>dub --quiet --build=release
 Workers Result          Time
-3       499500000       64 ms
+4       4999500000      116 ms
 ```
+
+I tryed to use std.parallelism instead of vibe-code. It twice faster but don't support fibers. I tryed to mix with std.concurrency but it's too hard for me.
 
 # Usage
 
@@ -40,7 +37,7 @@ dub.json:
 }
 ```
 
-[Actual examples in unit tests](./source/jin/go.d)
+More actual examples in unit tests.
 
 ## Import
 ```d
@@ -48,25 +45,26 @@ import jin.go;
 ```
 
 ## Create channels
-```d
-auto ints = new Channel!int;
 
+```d
 struct Data { int val }
-struct End {}
-alias Algebraic!(Data,End) Message 
+struct Error { string msg }
+alias Algebraic!(Data,Error) Message 
+
 Input!Message messages_input;
 auto messages_output = messages_input.pair;
 auto messages_input2 = messages_output.pair;
 
-Inputs!int ints_in;
-Outputs!int ints_out;
+Input!int ints_in;
+Output!int ints_out;
 ```
 
-## Start coroutines
+## Start goroutines
+
 ```d
 void incrementing( Output!int ints_out , Input!int ints_in ) {
 	while( ints_out.available >= 0 ) {
-		ints_out.next = ints_in.next + 1;
+		ints_out.put( ints_in.next + 1 );
 	}
 }
 
@@ -79,27 +77,35 @@ auto squaring( int limit ) {
 auto squares_in = go!squaring( 10 );
 ```
 
-## Send messages
-waits while outbox/outboxes is full
+## Provide messages
+
 ```d
-ints.next = 123; // send message
-ints.next!Data = 123; // make and send message
-ints.put( 123 ); // OutputRange style
+// Wait while outbox/outboxes is full
+messages_output.put( Data( 123 ) ); // make and send message
+messages_output.put!Data( 123 ); // ditto
+
+// Check which count of messages can be send without locking
+while( !its_out.ignore ) {
+	if( its_out.available > 0 ) {
+		ints_out.put( 7 );
+	}
+}
 ```
 
-## Receive messages
-waits for any message in inbox/inboxes
-```d
-writeln( results.next ); // get one message
-writeln( results.next.get!Data ); // get value from one Message
+## Consume messages
+
+```
+// Wait for any message in inbox/inboxes
+writeln( messages_input.next ); // take one message
+writeln( messages_input.next.get!Data ); // take value from one Message
 
 // visit one Message
-results.next.visit!(
-	( Data data ) { writeln( data ); } ,
-	( End end ) { } ,
+messages_input.next.visit!(
+	( Data data ) { writeln( data.val ); } ,
+	( Error error ) { writeln( error.msg );  } ,
 );
 
-// handle messages in cycle
+// handle all messages in cycle
 while( !results.empty ) {
 	if( results.pending > 0 ) writeln( results.next );
 };

@@ -1,53 +1,52 @@
 import std.datetime.stopwatch;
-import std.algorithm;
-import std.algorithm.iteration;
-import std.parallelism;
 import std.range;
 import std.stdio;
-import std.typecons;
-import std.concurrency;
-import std.parallelism;
-import core.thread;
+import vibe.core.core;
 
 import jin.go;
-import core.stdc.stdlib;
 
-enum long iterations = 1000;
-enum long threads = 1000;
+enum long iterations = 10000;
+enum long threads = 100;
+enum KB = 1024;
+enum MB = 1024 * KB;
 
-auto produce()
+static auto produce()
 {
 	return iterations.iota;
 }
 
-auto consume( Output!long sums , Input!long numbers )
+static auto consume(Output!long sums, Input!long numbers)
 {
 	long s;
-	foreach( n ; numbers ) {
+	foreach (n; numbers)
 		s += n;
-	}
-	sums.next = s;
-}
-
-void benchmark()
-{
-	auto timer = StopWatch( AutoStart.yes );
-
-	Input!long sums;
-	foreach( i ; threads.iota ) {
-		go!consume( sums.pair(1) , go!produce );
-	}
-
-	long sumsums = sums[].sum;
-
-	timer.stop();
-
-	writeln( "Workers\tResult\t\tTime" );
-	writeln( taskPool.size , "\t" , sumsums , "\t" , timer.peek.total!"msecs", " ms" );
-
+	sums.put(s);
 }
 
 void main()
 {
-	go!benchmark().workForce();
+	runTask({
+		auto timer = StopWatch(AutoStart.yes);
+
+		Input!long sums;
+		foreach (i; threads.iota)
+		{
+			go!consume(sums.pair(1), go!produce());
+		}
+
+		long sumsums;
+		foreach (s; sums)
+		{
+			sumsums += s;
+		}
+
+		timer.stop();
+
+		writeln("Workers\tResult\t\tTime");
+		writeln(workerThreadCount, "\t", sumsums, "\t", timer.peek.total!"msecs", " ms");
+
+	});
+
+	runEventLoopOnce();
+
 }
