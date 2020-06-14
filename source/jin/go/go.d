@@ -360,16 +360,16 @@ unittest
 
     for (;;)
     {
-        if (booms.pending > 0)
-        {
-            log ~= "BOOM!";
-            break;
-        }
         if (ticks.pending > 0)
         {
             log ~= "tick,";
             ticks.popFront;
             continue;
+        }
+        if (booms.pending > 0)
+        {
+            log ~= "BOOM!";
+            break;
         }
         10.msecs.sleep;
     }
