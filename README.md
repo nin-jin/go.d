@@ -1,6 +1,6 @@
 # Go.d
 
-Thread-pooled coroutines with [wait-free](https://en.wikipedia.org/wiki/Non-blocking_algorithm#Wait-freedom) staticaly typed communication channels
+Thread-pooled coroutines with [wait-free](https://en.wikipedia.org/wiki/Non-blocking_algorithm#Wait-freedom) staticaly typed autofinalizable communication channels.
 
 # Features
 
