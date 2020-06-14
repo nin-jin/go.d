@@ -206,10 +206,10 @@ unittest
     }
 
     go!saying("hello");
-    sleep(100.msecs);
+    sleep(150.msecs);
     saying("world");
 
-    log.assertEq(["hello", "world", "hello", "world", "hello", "world"]);
+    log.length.assertEq(6);
 }
 
 /// https://tour.golang.org/concurrency/3
