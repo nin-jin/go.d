@@ -119,8 +119,6 @@ while( !one.empty || !two.empty ) {
  
 # Complete example
 
-**currently broken**
-
 ```d
 import core.time;
 import std.stdio;
