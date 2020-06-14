@@ -367,13 +367,12 @@ unittest
         }
         if (ticks.pending > 0)
         {
-            log ~= "tick";
+            log ~= "tick,";
             ticks.popFront;
             continue;
         }
-        log ~= ".";
         51.msecs.sleep;
     }
 
-    log.assertEq("..tick..tick..tick..tick..BOOM!");
+    log.assertEq("tick,tick,tick,tick,BOOM!");
 }
