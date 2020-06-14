@@ -13,7 +13,7 @@ struct Input(Message)
     mixin Channel!Message;
 
     /// Minimum count of pending messages.
-	/// Negative value - new messages will never provided.
+    /// Negative value - new messages will never provided.
     ptrdiff_t pending()
     {
         ptrdiff_t pending = -1;
@@ -90,7 +90,9 @@ struct Input(Message)
         {
             const pending = this.pending.await;
             if (pending == -1)
-                return 0;
+            {
+                return -1;
+            }
 
             auto result = proceed(this.front);
             this.popFront();

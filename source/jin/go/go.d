@@ -192,22 +192,21 @@ unittest
     import std.range;
     import jin.go;
 
-    __gshared static string[] log;
+    Input!string log;
 
-    static void saying(string message)
+    static void saying(Output!string log, string message)
     {
         foreach (_; 3.iota)
         {
-            sleep(200.msecs);
-            log ~= message;
+            200.msecs.sleep;
+            log.put(message);
         }
     }
 
-    go!saying("hello");
-    sleep(150.msecs);
-    saying("world");
+    go!saying(log.pair, "hello");
+    saying(log.pair, "world");
 
-    log.length.assertEq(6);
+    log[].length.assertEq(6);
 }
 
 /// https://tour.golang.org/concurrency/3
@@ -354,8 +353,8 @@ unittest
         }
     }
 
-    auto ticks = go!tick(101.msecs);
-    auto booms = go!after(501.msecs);
+    auto booms = go!after(500.msecs);
+    auto ticks = go!tick(100.msecs);
 
     string log;
 
