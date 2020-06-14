@@ -353,8 +353,8 @@ unittest
         }
     }
 
-    auto booms = go!after(500.msecs);
     auto ticks = go!tick(100.msecs);
+    auto booms = go!after(450.msecs);
 
     string log;
 
