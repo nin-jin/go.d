@@ -1,50 +1,26 @@
 module jin.go.queue;
 
-import core.atomic;
-
 import std.container;
-import std.conv;
 
 import des.ts;
 
-/// Bytes in kilobyte.
-enum KB = 1024;
-
-/// Memory page size in bytes.
-enum page_size = 8 * KB;
-
-/// CPU cacheline size in bytes. 
-enum cache_line_size = 64;
-
-/// CPU word size in bytes.
-enum word_size = 8;
-
-alias release = MemoryOrder.rel;
+import jin.go.mem;
+import jin.go.cursor;
 
 /// Wait-free one input one output queue.
-align(cache_line_size) class Queue(Message)
+align(Line) class Queue(Message)
 {
-	/// Info of thread cursor.
-	align(cache_line_size) struct Cursor
-	{
-		/// Offset in buffer.
-		align(word_size) size_t offset = 0;
-
-		/// Finalized cursor will never change offset.
-		align(word_size) bool finalized = false;
-	}
-
 	/// Cursor to next free slot for message.
-	align(cache_line_size) shared Cursor provider;
+	align(Line) Cursor provider;
 
 	/// Cursor to next not received message.
-	align(cache_line_size) shared Cursor consumer;
+	align(Line) Cursor consumer;
 
 	/// Ring buffer of transferring messages.
-	align(word_size) Array!Message messages;
+	align(Line) Array!Message messages;
 
 	/// Buffer fits to one memory page by default.
-	this(size_t size = page_size / Message.sizeof - 1)
+	this(size_t size = Page / Message.sizeof - 1)
 	{
 		enforce(size > 0, "Queue size must be greater then 0");
 
@@ -70,7 +46,7 @@ align(cache_line_size) class Queue(Message)
 			return pending;
 		}
 
-		return -this.provider.finalized.to!ptrdiff_t;
+		return this.provider.finalized;
 	}
 
 	/// Count of messages to fulfill buffer.
@@ -85,7 +61,7 @@ align(cache_line_size) class Queue(Message)
 			return available;
 		}
 
-		return -(this.consumer.finalized.to!ptrdiff_t);
+		return this.consumer.finalized;
 	}
 
 	/// Put message without locking.
@@ -99,7 +75,7 @@ align(cache_line_size) class Queue(Message)
 
 		this.messages[offset] = value;
 
-		atomicStore!release(this.provider.offset, (offset + 1) % len);
+		this.provider.offset = (offset + 1) % len;
 	}
 
 	/// Create and put message.
@@ -110,10 +86,10 @@ align(cache_line_size) class Queue(Message)
 	}
 
 	/// True when no more messages will be consumed.
-    auto empty()
-    {
-        return this.pending == -1;
-    }
+	auto empty()
+	{
+		return this.pending < 0;
+	}
 
 	/// Get current pending message.
 	/// `pending` must be checked before.
@@ -131,14 +107,14 @@ align(cache_line_size) class Queue(Message)
 		assert(this.pending > 0, "Queue is empty");
 
 		const offset = (this.consumer.offset + 1) % this.messages.length;
-		atomicStore!release(this.consumer.offset, offset);
+		this.consumer.offset = offset;
 	}
 
-    /// True when no more messages will be consumed.
-    bool ignore()
-    {
-        return this.available == -1;
-    }
+	/// True when no more messages will be consumed.
+	bool ignore()
+	{
+		return this.available < 0;
+	}
 }
 
 /// Automatic fit buffer size to memory page size.
@@ -192,7 +168,7 @@ unittest
 	import core.exception;
 
 	auto q = new Queue!int(1);
-	q.provider.finalized = true;
+	q.provider.finalize();
 
 	q.front.assertThrown!AssertError;
 	q.popFront.assertThrown!AssertError;
@@ -204,7 +180,7 @@ unittest
 	import core.exception;
 
 	auto q = new Queue!int(1);
-	q.consumer.finalized = true;
+	q.consumer.finalize();
 	q.put(7);
 
 	q.put(77).assertThrown!AssertError;

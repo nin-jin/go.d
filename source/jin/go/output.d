@@ -77,7 +77,7 @@ struct Output(Message)
     {
         foreach (queue; this.queues)
         {
-            queue.provider.finalized = true;
+            queue.provider.finalize();
         }
     }
 

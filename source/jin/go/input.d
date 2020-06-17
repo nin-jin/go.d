@@ -119,7 +119,7 @@ struct Input(Message)
     {
         foreach (queue; this.queues)
         {
-            queue.consumer.finalized = true;
+            queue.consumer.finalize();
         }
     }
 
