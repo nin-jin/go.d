@@ -4,7 +4,7 @@ import core.atomic;
 
 import jin.go.mem;
 
-/// Atomic thread cursor.
+/// Atomic buffer cursor.
 align(Line) struct Cursor
 {
     /// Offset in buffer.
