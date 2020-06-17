@@ -121,10 +121,10 @@ align(Line) class Queue(Message)
 unittest
 {
 	auto q1 = new Queue!int;
-	q1.size.assertEq(2047);
+	q1.size.assertEq(1023);
 
 	auto q2 = new Queue!long;
-	q2.size.assertEq(1023);
+	q2.size.assertEq(511);
 }
 
 /// Pending and available.
