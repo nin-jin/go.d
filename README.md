@@ -19,7 +19,7 @@ Thread-pooled coroutines with [wait-free](https://en.wikipedia.org/wiki/Non-bloc
 >go run app.go --release
 Workers Result          Time
 4       4999500000      25.9163ms
-C:\proj\go>dub --quiet --build=release
+>dub --quiet --build=release
 Workers Result          Time
 4       4999500000      116 ms
 ```
@@ -32,7 +32,7 @@ dub.json:
 ```json
 {
 	"dependencies": {
-		"jin-go": "~>1.0.0"
+		"jin-go": "~>2.0.0"
 	}
 }
 ```
