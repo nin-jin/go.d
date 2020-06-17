@@ -30,10 +30,10 @@ I tryed to use std.parallelism instead of vibe-code. It twice faster but don't s
 
 - **[mem](source/jin/go/mem.d)** - Various memory constants
 - **[cursor](source/jin/go/queue.d)** - Atomic buffer cursor with finalization support
-- **[queue](source/jin/go/queue.d)** - Low level 1p1c queue (prefer to use channels)
+- **[queue](source/jin/go/queue.d)** - Low level 1p1c wait-free queue (prefer to use channels)
 - **[channel](source/jin/go/channel.d)** - Common channels logic
-- **[input](source/jin/go/input.d)** - Input round-robin mp1c channel
-- **[output](source/jin/go/output.d)** - Output round-robin 1pmc channel
+- **[input](source/jin/go/input.d)** - Round-robin wait-free mp1c input channel
+- **[output](source/jin/go/output.d)** - Round-robin wait-free 1pmc output channel
 - **[go](source/jin/go/go.d)** - Goroutine starters
 - **[await](source/jin/go/await.d)** - Yield lock for goroutines
 
