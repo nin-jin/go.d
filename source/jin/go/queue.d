@@ -64,6 +64,12 @@ align(Line) class Queue(Message)
 		return this.consumer.finalized;
 	}
 
+	/// True when no more messages will be consumed.
+	bool ignore()
+	{
+		return this.available < 0;
+	}
+
 	/// Put message without locking.
 	/// `available` must be checked before.
 	void put(Value)(Value value)
@@ -108,12 +114,6 @@ align(Line) class Queue(Message)
 
 		const offset = (this.consumer.offset + 1) % this.messages.length;
 		this.consumer.offset = offset;
-	}
-
-	/// True when no more messages will be consumed.
-	bool ignore()
-	{
-		return this.available < 0;
 	}
 }
 
