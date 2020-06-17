@@ -64,7 +64,7 @@ align(Line) class Queue(Message)
 		return this.consumer.finalized;
 	}
 
-	/// True when no more messages will be consumed.
+	/// True when no more messages can never be provided.
 	bool ignore()
 	{
 		return this.available < 0;
@@ -91,7 +91,7 @@ align(Line) class Queue(Message)
 		this.put(Value(args));
 	}
 
-	/// True when no more messages will be consumed.
+	/// True when no more messages can never be consumed.
 	auto empty()
 	{
 		return this.pending < 0;
