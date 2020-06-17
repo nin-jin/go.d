@@ -43,7 +43,7 @@ dub.json:
 ```json
 {
 	"dependencies": {
-		"jin-go": "~>2.0.0"
+		"jin-go": "~>2.0"
 	}
 }
 ```
