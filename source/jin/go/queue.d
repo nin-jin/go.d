@@ -5,40 +5,52 @@ import std.container;
 import des.ts;
 
 import jin.go.mem;
+import jin.go.aligned;
 import jin.go.cursor;
 
 /// Wait-free one input one output queue.
-align(Line) class Queue(Message)
+/// Buffer fits to one memory page by default.
+align(Line) class Queue(Message, size_t Size)
 {
+	static assert(Size >= 0, "Queue size must be greater then 0");
+
+	// Ring buffer uses one additional element to defferentiate empty and full.
+	enum Capacity = Size > 0 ? Size + 1 : (Page - 2 * Line) / Aligned!Message.sizeof - 1;
+
+	static assert(Queue!(int,0).Capacity == 61);
+	static assert(Queue!(long,0).Capacity == 61);
+	
+	pragma(msg,Size);
+	pragma(msg,Message.sizeof);
+	pragma(msg,Aligned!Message.sizeof);
+	pragma(msg,Capacity);
+
 	/// Cursor to next free slot for message.
 	align(Line) Cursor provider;
 
 	/// Cursor to next not received message.
 	align(Line) Cursor consumer;
 
+	/// Size of buffer 
+	align(Line) size_t capacity = Capacity;
+
 	/// Ring buffer of transferring messages.
-	align(Line) Array!Message messages;
+	align(Line) Aligned!Message[Capacity] messages;
 
-	/// Buffer fits to one memory page by default.
-	this(size_t size = Page / Message.sizeof - 1)
-	{
-		enforce(size > 0, "Queue size must be greater then 0");
-
-		// Ring buffer uses one additional element to defferentiate empty and full.
-		this.messages.length = size + 1;
+	this(size_t size = 0) {
 	}
 
 	/// Maximum count of transferring messages.
 	@property size_t size()
 	{
-		return this.messages.length - 1;
+		return this.capacity - 1;
 	}
 
 	/// Count of provided messages.
 	/// Negative value - new messages will never provided.
 	ptrdiff_t pending() const
 	{
-		const len = this.messages.length;
+		const len = this.capacity;
 		const pending = (len - this.consumer.offset + this.provider.offset) % len;
 
 		if (pending > 0)
@@ -53,7 +65,7 @@ align(Line) class Queue(Message)
 	/// Negative value - new messages will never provided.
 	ptrdiff_t available() const
 	{
-		const len = this.messages.length;
+		const len = this.capacity;
 		const available = (len - this.provider.offset + this.consumer.offset - 1) % len;
 
 		if (available > 0)
@@ -77,7 +89,7 @@ align(Line) class Queue(Message)
 		assert(this.available > 0, "Queue is full");
 
 		const offset = this.provider.offset;
-		const len = this.messages.length;
+		const len = this.capacity;
 
 		this.messages[offset] = value;
 
@@ -112,25 +124,15 @@ align(Line) class Queue(Message)
 	{
 		assert(this.pending > 0, "Queue is empty");
 
-		const offset = (this.consumer.offset + 1) % this.messages.length;
+		const offset = (this.consumer.offset + 1) % this.capacity;
 		this.consumer.offset = offset;
 	}
-}
-
-/// Automatic fit buffer size to memory page size.
-unittest
-{
-	auto q1 = new Queue!int;
-	q1.size.assertEq(1023);
-
-	auto q2 = new Queue!long;
-	q2.size.assertEq(511);
 }
 
 /// Pending and available.
 unittest
 {
-	auto q = new Queue!int(3);
+	auto q = new Queue!(int,3);
 	q.pending.assertEq(0);
 	q.available.assertEq(3);
 
@@ -179,7 +181,7 @@ unittest
 {
 	import core.exception;
 
-	auto q = new Queue!int(1);
+	auto q = new Queue!(int,1);
 	q.consumer.finalize();
 	q.put(7);
 

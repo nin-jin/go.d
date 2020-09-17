@@ -6,11 +6,11 @@ import jin.go.await;
 
 /// Round robin output channel.
 /// Implements InputRange.
-struct Output(Message)
+struct Output(Message, size_t QueueSize = 0)
 {
     alias Complement = Input;
 
-    mixin Channel!Message;
+    mixin Channel!(Message,QueueSize);
 
     /// Count of messages that can be privided now.
     /// Negative value - new messages will never provided.
@@ -70,6 +70,12 @@ struct Output(Message)
     void put(Value, Args...)(Args args)
     {
         this.put(Value(args));
+    }
+
+    /// `output ~= message;`
+    void opOpAssign(string op)(Message message) if (op == "~")
+    {
+        this.put(message);
     }
 
     /// Fix all cursors on destroy.

@@ -6,9 +6,8 @@ public import jin.go.output;
 public import jin.go.input;
 
 /// Common `Queue` collections implementation.
-mixin template Channel(Message)
+mixin template Channel(Message, size_t QueueSize)
 {
-
     import std.algorithm;
     import std.container;
 
@@ -20,19 +19,19 @@ mixin template Channel(Message)
     static __isIsolatedType = true;
 
     /// All registered Queues.
-    Array!(Queue!Message) queues;
+    Array!(Queue!(Message,QueueSize)) queues;
 
     /// Index of current Queue.
     private size_t current;
 
     /// Makes new registered `Queue` and returns `Complement` channel.
     /// Maximum count of messages in a buffer can be provided.
-    Complement!Message pair(Args...)(Args args)
+    auto pair()
     {
-        auto queue = new Queue!Message(args);
+        auto queue = new Queue!(Message,QueueSize);
         this.queues ~= queue;
 
-        Complement!Message complement;
+        Complement!(Message,QueueSize) complement;
         complement.queues ~= queue;
 
         return complement;
@@ -60,10 +59,10 @@ mixin template Channel(Message)
 /// Autofinalize and take all.
 unittest
 {
-    auto ii = Input!int();
+    Input!(int,5) ii;
 
     {
-        auto oo = ii.pair(5);
+        auto oo = ii.pair;
 
         oo.put(7);
         oo.put(77);
@@ -77,8 +76,8 @@ unittest
 {
     import std.algorithm;
 
-    auto i1 = Input!int();
-    auto o1 = i1.pair(5);
+    Input!(int,5) i1;
+    auto o1 = i1.pair;
 
     auto i2 = i1.move;
     auto o2 = o1.move;
@@ -94,10 +93,10 @@ unittest
 /// Round robin input
 unittest
 {
-    auto ii = Input!int();
+    Input!(int,5) ii;
 
-    auto o1 = ii.pair(5);
-    auto o2 = ii.pair(5);
+    auto o1 = ii.pair;
+    auto o2 = ii.pair;
 
     o1.put(7);
     o1.put(777);
@@ -113,10 +112,10 @@ unittest
 /// Round robin output
 unittest
 {
-    auto oo = Output!int();
+    Output!(int,5) oo;
 
-    auto i1 = oo.pair(5);
-    auto i2 = oo.pair(5);
+    auto i1 = oo.pair;
+    auto i2 = oo.pair;
 
     oo.put(7);
     oo.put(13);

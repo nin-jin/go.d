@@ -6,11 +6,11 @@ import jin.go.await;
 
 /// Round robin input channel.
 /// Implements InputRange.
-struct Input(Message)
+struct Input(Message, size_t QueueSize = 0)
 {
     alias Complement = Output;
 
-    mixin Channel!Message;
+    mixin Channel!(Message,QueueSize);
 
     /// Minimum count of pending messages.
     /// Negative value - new messages will never provided.

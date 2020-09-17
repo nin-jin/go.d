@@ -233,16 +233,16 @@ unittest
     import std.range;
     import jin.go;
 
-    static auto summing(Output!int sums, const int[] numbers)
+    static auto summing(Output!(int,1) sums, const int[] numbers)
     {
         sums.put(numbers.sum);
     }
 
     immutable int[] numbers = [7, 2, 8, -9, 4, 0];
 
-    Input!int sums;
-    go!summing(sums.pair(1), numbers[0 .. $ / 2]);
-    go!summing(sums.pair(1), numbers[$ / 2 .. $]);
+    Input!(int,1) sums;
+    go!summing(sums.pair, numbers[0 .. $ / 2]);
+    go!summing(sums.pair, numbers[$ / 2 .. $]);
     auto res = (&sums).take(2).array;
 
     (res ~ res.sum).sort.assertEq([-5, 12, 17]);
@@ -264,7 +264,7 @@ unittest
     }
 
     Input!int numbers;
-    go!fibonacci(numbers.pair(10), 10);
+    go!fibonacci(numbers.pair!10, 10);
 
     numbers[].assertEq([0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
 }
@@ -323,7 +323,7 @@ unittest
     Output!int numbers;
     Input!bool controls;
 
-    go!printing(controls.pair(1), numbers.pair(1));
+    go!printing(controls.pair!1, numbers.pair!1);
     go!fibonacci(numbers);
 
     controls.pending.await;
