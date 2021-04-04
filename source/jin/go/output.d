@@ -5,7 +5,7 @@ import jin.go.input;
 import jin.go.await;
 
 /// Round robin output channel.
-/// Implements InputRange.
+/// Implements OutputRange.
 struct Output(Message)
 {
     alias Complement = Input;
@@ -72,7 +72,7 @@ struct Output(Message)
         this.put(Value(args));
     }
 
-    /// Fix all cursors on destroy.
+    /// Finalizes all cursors on destroy.
     ~this()
     {
         foreach (queue; this.queues)
