@@ -1,6 +1,8 @@
 module jin.go.cursor;
 
 import core.atomic;
+alias acquire = MemoryOrder.acq;
+alias release = MemoryOrder.rel;
 
 import jin.go.mem;
 
@@ -13,14 +15,14 @@ align(Line) struct Cursor
     /// Offset in buffer.
     size_t offset() const
     {
-        return this._offset.atomicLoad!(MemoryOrder.acq);
+        return this._offset.atomicLoad!acquire;
     }
 
     /// Offset in buffer. Can't be changed when finalized.
     void offset(size_t next)
     {
         assert(this._finalized == 0, "Change offset of finalized cursor");
-        this._offset.atomicStore!(MemoryOrder.rel)(next);
+        this._offset.atomicStore!release(next);
     }
 
     /// Finalized cursor shall never change offset.
@@ -29,12 +31,12 @@ align(Line) struct Cursor
     /// Finalized cursor shall never change offset.
     ptrdiff_t finalized() const
     {
-        return this._finalized.atomicLoad!(MemoryOrder.acq);
+        return this._finalized.atomicLoad!acquire;
     }
 
     /// Finalize cursor to prevent offset changes.
     void finalize()
     {
-        this._finalized.atomicStore!(MemoryOrder.rel)(ptrdiff_t(-1));
+        this._finalized.atomicStore!release(ptrdiff_t(-1));
     }
 }
