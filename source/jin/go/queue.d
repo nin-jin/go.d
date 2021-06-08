@@ -1,8 +1,7 @@
 module jin.go.queue;
 
 import std.container;
-
-import des.ts;
+import std.exception;
 
 import jin.go.mem;
 import jin.go.cursor;
@@ -121,45 +120,45 @@ align(Line) class Queue(Message)
 unittest
 {
 	auto q1 = new Queue!int;
-	q1.size.assertEq(1023);
+	assert(q1.size == 1023);
 
 	auto q2 = new Queue!long;
-	q2.size.assertEq(511);
+	assert(q2.size == 511);
 }
 
 /// Pending and available.
 unittest
 {
 	auto q = new Queue!int(3);
-	q.pending.assertEq(0);
-	q.available.assertEq(3);
+	assert(q.pending == 0);
+	assert(q.available == 3);
 
 	q.put(7);
-	q.pending.assertEq(1);
-	q.available.assertEq(2);
+	assert(q.pending == 1);
+	assert(q.available == 2);
 
 	q.put(77);
-	q.pending.assertEq(2);
-	q.available.assertEq(1);
+	assert(q.pending == 2);
+	assert(q.available == 1);
 
 	q.put(777);
-	q.pending.assertEq(3);
-	q.available.assertEq(0);
+	assert(q.pending == 3);
+	assert(q.available == 0);
 
-	q.front.assertEq(7);
+	assert(q.front == 7);
 	q.popFront;
-	q.pending.assertEq(2);
-	q.available.assertEq(1);
+	assert(q.pending == 2);
+	assert(q.available == 1);
 
-	q.front.assertEq(77);
+	assert(q.front == 77);
 	q.popFront;
-	q.pending.assertEq(1);
-	q.available.assertEq(2);
+	assert(q.pending == 1);
+	assert(q.available == 2);
 
-	q.front.assertEq(777);
+	assert(q.front == 777);
 	q.popFront;
-	q.pending.assertEq(0);
-	q.available.assertEq(3);
+	assert(q.pending == 0);
+	assert(q.available == 3);
 }
 
 /// Consume from empty is forbidden.
@@ -198,5 +197,5 @@ unittest
 	auto q = new Queue!Foo;
 	q.put!Foo(7, 13);
 
-	q.front.assertEq(Foo(7, 13));
+	assert(q.front == Foo(7, 13));
 }

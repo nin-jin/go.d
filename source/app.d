@@ -5,7 +5,7 @@ import vibe.core.core;
 
 import jin.go;
 
-enum long iterations = 10000;
+enum long iterations = 10_000;
 enum long threads = 100;
 enum KB = 1024;
 enum MB = 1024 * KB;

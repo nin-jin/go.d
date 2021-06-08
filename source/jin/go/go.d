@@ -5,7 +5,6 @@ import std.traits;
 import std.algorithm;
 
 import vibe.core.core;
-import des.ts;
 
 public import jin.go.channel;
 public import jin.go.await;
@@ -76,7 +75,7 @@ unittest
 
     feed.put(3);
     feed.put(4);
-    sums.next.assertEq(3 + 4);
+    assert(sums.next == 3 + 4);
 }
 
 /// Bidirection : put*2 , start , take
@@ -98,7 +97,7 @@ unittest
     Input!int sums;
     go!summing(sums.pair, ifeed);
 
-    sums.next.assertEq(3 + 4);
+    assert(sums.next == 3 + 4);
 }
 
 /// Round robin : start*2 , put*4 , take*2
@@ -122,7 +121,7 @@ unittest
     feed.put(5); // 1
     feed.put(6); // 2
 
-    sums[].sort().assertEq([3 + 5, 4 + 6]);
+    assert(sums[].sort().array == [3 + 5, 4 + 6]);
 }
 
 /// Event loop on multiple queues
@@ -161,8 +160,8 @@ unittest
         }
     }
 
-    results1.assertEq([2, 3]);
-    results2.assertEq([4, 5]);
+    assert(results1 == [2, 3]);
+    assert(results2 == [4, 5]);
 }
 
 /// Blocking on buffer overflow
@@ -179,7 +178,7 @@ unittest
     auto numbs = go!generating;
     10.msecs.sleep;
 
-    numbs[].sum.assertEq(200);
+    assert(numbs[].sum == 200);
 }
 
 /// https://tour.golang.org/concurrency/1
@@ -206,7 +205,7 @@ unittest
     go!saying(log.pair, "hello");
     saying(log.pair, "world");
 
-    log[].length.assertEq(6);
+    assert(log[].length == 6);
 }
 
 /// https://tour.golang.org/concurrency/3
@@ -220,8 +219,8 @@ unittest
     auto input = output.pair;
     output.put(1);
     output.put(2);
-    input.next.assertEq(1);
-    input.next.assertEq(2);
+    assert(input.next == 1);
+    assert(input.next == 2);
 }
 
 /// https://tour.golang.org/concurrency/2
@@ -245,7 +244,7 @@ unittest
     go!summing(sums.pair(1), numbers[$ / 2 .. $]);
     auto res = (&sums).take(2).array;
 
-    (res ~ res.sum).sort.assertEq([-5, 12, 17]);
+    assert((res ~ res.sum).sort.array == [-5, 12, 17]);
 }
 
 /// https://tour.golang.org/concurrency/4
@@ -266,7 +265,7 @@ unittest
     Input!int numbers;
     go!fibonacci(numbers.pair(10), 10);
 
-    numbers[].assertEq([0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
+    assert(numbers[] == [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
 }
 
 /// https://tour.golang.org/concurrency/4
@@ -281,8 +280,8 @@ unittest
         return recurrence!q{ a[n-1] + a[n-2] }(0, 1).take(limit);
     }
 
-    fibonacci(10).array.assertEq([0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
-    go!fibonacci(10).array.assertEq([0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
+    assert(fibonacci(10).array == [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
+    assert(go!fibonacci(10).array == [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
 }
 
 /// https://tour.golang.org/concurrency/5
@@ -328,7 +327,7 @@ unittest
 
     controls.pending.await;
 
-    log.assertEq([0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
+    assert(log == [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
 }
 
 /// https://tour.golang.org/concurrency/6
@@ -375,5 +374,5 @@ unittest
     }
 
     // unstable
-    // log.assertEq("tick,tick,tick,tick,BOOM!");
+    // log == "tick,tick,tick,tick,BOOM!");
 }

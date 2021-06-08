@@ -1,7 +1,5 @@
 module jin.go.channel;
 
-import des.ts;
-
 public import jin.go.output;
 public import jin.go.input;
 
@@ -69,7 +67,7 @@ unittest
         oo.put(77);
     }
 
-    ii[].assertEq([7, 77]);
+    assert(ii[] == [7, 77]);
 }
 
 /// Movement.
@@ -87,8 +85,8 @@ unittest
     o2.put(77);
     o2.destroy();
 
-    i1[].assertEq([]);
-    i2[].assertEq([7, 77]);
+    assert(i1[] == []);
+    assert(i2[] == [7, 77]);
 }
 
 /// Round robin input
@@ -107,7 +105,7 @@ unittest
     o2.put(666);
     o2.destroy();
 
-    ii[].assertEq([7, 13, 777, 666]);
+    assert(ii[] == [7, 13, 777, 666]);
 }
 
 /// Round robin output
@@ -124,6 +122,6 @@ unittest
     oo.put(666);
     oo.destroy();
 
-    i1[].assertEq([7, 777]);
-    i2[].assertEq([13, 666]);
+    assert(i1[] == [7, 777]);
+    assert(i2[] == [13, 666]);
 }
