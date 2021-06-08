@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"time"
 	"runtime"
+	"time"
 )
 
 func produce(ints chan<- int64) {
@@ -36,11 +36,11 @@ func main() {
 
 	sumsums := int64(0)
 	for i := 0; i < threads; i++ {
-		sumsums += <- sums
+		sumsums += <-sums
 	}
 
 	t1 := time.Now()
 
-	fmt.Println( "Workers\tResult\t\tTime" );
-	fmt.Printf( "%d\t%d\t%v" , runtime.GOMAXPROCS(0) , sumsums , t1.Sub(t0) );
+	fmt.Println("Workers\tResult\t\tTime")
+	fmt.Printf("%d\t%d\t%v", runtime.GOMAXPROCS(0), sumsums, t1.Sub(t0))
 }

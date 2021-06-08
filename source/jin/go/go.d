@@ -10,7 +10,7 @@ public import jin.go.channel;
 public import jin.go.await;
 
 /// Run function asynchronously
-auto go(alias task, Args...)(auto ref Args args)
+auto go(alias task, Args...)(Args args)
         if (is(ReturnType!task : void) && (Parameters!task.length == Args.length))
 {
     foreach (i, Arg; Args)
@@ -23,7 +23,7 @@ auto go(alias task, Args...)(auto ref Args args)
 }
 
 /// Run function asynchronously and return Queue connectetd with range returned by function
-auto go(alias task, Args...)(auto ref Args args)
+auto go(alias task, Args...)(Args args)
         if (isInputRange!(ReturnType!task))
 {
     alias Result = ReturnType!task;
@@ -42,13 +42,13 @@ auto go(alias task, Args...)(auto ref Args args)
 }
 
 /// Run function with autocreated result Queue and return this Queue
-auto go(alias task, Args...)(auto ref Args args)
+auto go(alias task, Args...)(Args args)
         if ((Parameters!task.length == Args.length + 1)
             && (is(Parameters!task[0] == Output!Message, Message)))
 {
     Parameters!task[0] results;
     auto future = results.pair;
-    go!task(results, args);
+    go!task(results.move, args);
     return future;
 }
 
@@ -95,7 +95,7 @@ unittest
     feed.destroy();
 
     Input!int sums;
-    go!summing(sums.pair, ifeed);
+    go!summing(sums.pair, ifeed.move);
 
     assert(sums.next == 3 + 4);
 }
@@ -323,7 +323,7 @@ unittest
     Input!bool controls;
 
     go!printing(controls.pair(1), numbers.pair(1));
-    go!fibonacci(numbers);
+    go!fibonacci(numbers.move);
 
     controls.pending.await;
 
@@ -374,5 +374,5 @@ unittest
     }
 
     // unstable
-    // log == "tick,tick,tick,tick,BOOM!");
+    // assert( log == "tick,tick,tick,tick,BOOM!");
 }
