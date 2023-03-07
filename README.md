@@ -6,7 +6,7 @@ Thread-pooled coroutines with [wait-free](https://en.wikipedia.org/wiki/Non-bloc
 
 * Static typed channels (but you can use [std.variant](https://dlang.org/library/std/variant.html) to transfer various data).
 * Minimal message size (no additional memory cost).
-* Wait free channels (but if you don't check for avalability/pending you will be locked).
+* Wait free channels (but if you don't check for avalability/pending you will be blocked).
 * Static check for message transition safety (allowed only shared, immutable and non-copyable).
 * Every goroutine runs on thread poll (use runEventLoopOnce to use main thread too).
 * Automatic finalizing queues on channel scope exit (use `empty`/`ignore` to check it).
@@ -36,6 +36,10 @@ I tryed to use std.parallelism instead of vibe-code. It twice faster but don't s
 - **[output](source/jin/go/output.d)** - Round-robin wait-free 1pmc output channel
 - **[go](source/jin/go/go.d)** - Goroutine starters
 - **[await](source/jin/go/await.d)** - Yield lock for goroutines
+
+# Internals
+
+![](readme.drawio.svg)
 
 # Usage
 
