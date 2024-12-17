@@ -7,16 +7,16 @@ import jin.go.mem;
 import jin.go.cursor;
 
 /// Wait-free one input one output queue.
-align(Line) class Queue(Message)
+class Queue(Message)
 {
 	/// Cursor to next free slot for message.
-	align(Line) Cursor provider;
+	Cursor provider;
 
 	/// Cursor to next not received message.
-	align(Line) Cursor consumer;
+	Cursor consumer;
 
 	/// Ring buffer of transferring messages.
-	align(Line) Array!Message messages;
+	Array!Message messages;
 
 	/// Buffer fits to one memory page by default.
 	this(size_t size = Page / Message.sizeof - 1)

@@ -23,8 +23,7 @@ auto go(alias task, Args...)(Args args)
 }
 
 /// Run function asynchronously and return Queue connectetd with range returned by function
-auto go(alias task, Args...)(Args args)
-        if (isInputRange!(ReturnType!task))
+auto go(alias task, Args...)(Args args) if (isInputRange!(ReturnType!task))
 {
     alias Result = ReturnType!task;
     alias Message = ElementType!Result;
@@ -44,7 +43,7 @@ auto go(alias task, Args...)(Args args)
 /// Run function with autocreated result Queue and return this Queue
 auto go(alias task, Args...)(Args args)
         if ((Parameters!task.length == Args.length + 1)
-            && (is(Parameters!task[0] == Output!Message, Message)))
+        && (is(Parameters!task[0] == Output!Message, Message)))
 {
     Parameters!task[0] results;
     auto future = results.pair;

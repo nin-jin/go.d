@@ -1,6 +1,7 @@
 module jin.go.cursor;
 
 import core.atomic;
+
 alias acquire = MemoryOrder.acq;
 alias release = MemoryOrder.rel;
 
@@ -10,7 +11,7 @@ import jin.go.mem;
 align(Line) struct Cursor
 {
     /// Offset in buffer.
-    align(Line) private shared size_t _offset;
+    private shared size_t _offset;
 
     /// Offset in buffer.
     size_t offset() const
@@ -26,7 +27,7 @@ align(Line) struct Cursor
     }
 
     /// Finalized cursor shall never change offset.
-    align(Line) private shared ptrdiff_t _finalized;
+    private shared ptrdiff_t _finalized;
 
     /// Finalized cursor shall never change offset.
     ptrdiff_t finalized() const
@@ -37,6 +38,6 @@ align(Line) struct Cursor
     /// Finalize cursor to prevent offset changes.
     void finalize()
     {
-        this._finalized.atomicStore!release(ptrdiff_t(-1));
+        this._finalized.atomicStore!release(-1);
     }
 }

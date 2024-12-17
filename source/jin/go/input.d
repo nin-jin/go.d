@@ -52,12 +52,12 @@ struct Input(Message)
         return this.pending == -1;
     }
 
-    /// Get message fromm current non clear Queue or wait.
+    /// Get message from current non empty Queue or wait.
     /// `pending` must be checked before.
     Message front()
     {
         const pending = this.pending.await;
-        assert(pending != -1, "Message will never provided");
+        assert(pending != -1, "Message will never be provided");
 
         return this.queues[this.current].front;
     }

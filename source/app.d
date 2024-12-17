@@ -31,7 +31,7 @@ void main()
 		Input!long sums;
 		foreach (i; threads.iota)
 		{
-			sums.pair(1).go!consume( go!produce );
+			sums.pair(1).go!consume(go!produce);
 		}
 
 		long sumsums;

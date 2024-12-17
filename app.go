@@ -7,7 +7,7 @@ import (
 )
 
 func produce(ints chan<- int64) {
-	for j := int64(0); j < 10000; j++ {
+	for j := int64(0); j < 10_000; j++ {
 		ints <- j
 	}
 	close(ints)
@@ -29,7 +29,7 @@ func main() {
 	sums := make(chan int64, threads)
 
 	for i := 0; i < threads; i++ {
-		ints := make(chan int64, 100)
+		ints := make(chan int64, 128)
 		go produce(ints)
 		go consume(ints, sums)
 	}
