@@ -4,6 +4,8 @@ import jin.go.channel;
 import jin.go.input;
 import jin.go.await;
 
+import std.range;
+
 /// Round robin output channel.
 /// Implements OutputRange.
 struct Output(Message)
@@ -17,15 +19,11 @@ struct Output(Message)
     ptrdiff_t available()
     {
         ptrdiff_t available = -1;
-        const ways = this.queues.length;
 
-        if (ways == 0)
-        {
+        if (this.queues.length == 0)
             return available;
-        }
 
-        const start = this.current;
-        do
+        foreach (i; this.queues.length.iota)
         {
             const queue = this.queues[this.current];
 
@@ -35,14 +33,17 @@ struct Output(Message)
                 return available2;
             }
 
-            if (available2 == 0)
+            // skip full queue
+            if (available2 < 0)
             {
-                available = 0;
+                this.currentUnlink();
+                continue;
             }
 
-            this.current = (this.current + 1) % ways;
+            available = 0;
+            this.current = (this.current + 1) % this.queues.length;
+
         }
-        while (this.current != start);
 
         return available;
     }

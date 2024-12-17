@@ -13,3 +13,4 @@ __dummy.html
 dub.selections.json
 *.lst
 *.dll
+*.pdb

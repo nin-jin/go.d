@@ -23,6 +23,20 @@ mixin template Channel(Message)
     /// Index of current Queue.
     private size_t current;
 
+    /// O(1) Remove current queue.
+    private void currentUnlink()
+    {
+        if (this.current + 1 < this.queues.length)
+        {
+            this.queues[this.current] = this.queues.removeAny();
+            return;
+        }
+
+        this.queues.removeBack();
+        this.current = 0;
+
+    }
+
     /// Makes new registered `Queue` and returns `Complement` channel.
     /// Maximum count of messages in a buffer can be provided.
     Complement!Message pair(Args...)(Args args)
