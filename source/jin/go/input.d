@@ -93,13 +93,18 @@ struct Input(Message)
                 return -1;
             }
 
-            auto result = proceed(this.front);
-            this.popFront();
-
-            if (result)
+            auto queue = this.queues[this.current];
+            foreach (i; pending.iota)
             {
-                return result;
+                auto result = proceed(queue.front);
+                queue.popFront;
+
+                if (result)
+                {
+                    return result;
+                }
             }
+
         }
     }
 

@@ -54,6 +54,25 @@ struct Output(Message)
         return this.available == -1;
     }
 
+    /// Send all items from Input Range
+    void feed(Values)(Values input) if (isInputRange!Values)
+    {
+        size_t available = 0;
+        foreach (item; input)
+        {
+            if (!available)
+            {
+                available = this.available.await;
+                assert(available != -1, "Message will never consumed");
+            }
+
+            const current = this.current;
+            this.queues[current].put(item);
+            available -= 1;
+
+        }
+    }
+
     /// Put message to current non full Queue and switch Queue
     /// `available` must be checked before.
     void put(Value)(Value value)

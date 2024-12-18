@@ -32,7 +32,7 @@ auto go(alias task, Args...)(Args args) if (isInputRange!(ReturnType!task))
 
     static void wrapper(Output!Message future, Result function(Args) task, Args args)
     {
-        task(args).copy(&future);
+        future.feed( task(args) );
     }
 
     go!wrapper(future.pair, &task, args);
