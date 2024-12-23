@@ -18,6 +18,7 @@ jobs:
                 dc: [dmd, ldc, gdc]
                 exclude:
                   - { os: macOS-latest, dc: gdc }
+                  - { os: windows-latest, dc: gdc }
 
         runs-on: ${{ matrix.os }}
         steps:
