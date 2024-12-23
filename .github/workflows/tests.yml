@@ -15,9 +15,9 @@ jobs:
         strategy:
             matrix:
                 os: [ubuntu-latest, windows-latest, macOS-latest]
-                dc: [dmd, ldc, gdc]
+                dc: [dmd-latest, ldc-latest, gdc-latest]
                 exclude:
-                  - { os: macOS-latest, dc: dmd }
+                  - { os: macOS-latest, dc: dmd-latest }
 
         runs-on: ${{ matrix.os }}
         steps:
