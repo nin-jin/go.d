@@ -15,16 +15,17 @@ jobs:
         strategy:
             matrix:
                 os: [ubuntu-latest, windows-latest, macOS-latest]
-                dc: [dmd-latest, ldc-latest]
+                dc: [dmd, ldc, gdc]
+                exclude:
+                  - { os: macOS-latest, dc: gdc }
+                  - { os: windows-latest, dc: gdc }
 
         runs-on: ${{ matrix.os }}
         steps:
             - uses: actions/checkout@v2
 
-            - name: Install D compiler
-              uses: mihails-strasuns/setup-dlang@v1.0.6
+            - uses: dlang-community/setup-dlang@v2
               with:
                   compiler: ${{ matrix.dc }}
 
-            - name: Run tests
-              run: dub -q test
+            - run: dub -q test
