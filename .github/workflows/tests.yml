@@ -27,5 +27,6 @@ jobs:
             - uses: dlang-community/setup-dlang@v2
               with:
                   compiler: ${{ matrix.dc }}
+                  dub: latest
 
             - run: dub -q test
