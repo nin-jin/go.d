@@ -103,7 +103,7 @@ unittest
     assert(i2[] == [7, 77]);
 }
 
-/// Round robin input
+/// Batched input
 unittest
 {
     auto ii = Input!int();
@@ -119,7 +119,7 @@ unittest
     o2.put(666);
     o2.destroy();
 
-    assert(ii[] == [7, 13, 777, 666]);
+    assert(ii[] == [7, 777, 13, 666]);
 }
 
 /// Round robin output
