@@ -15,10 +15,7 @@ jobs:
         strategy:
             matrix:
                 os: [ubuntu-latest, windows-latest, macOS-latest]
-                dc: [dmd, ldc, gdc]
-                exclude:
-                  - { os: macOS-latest, dc: gdc }
-                  - { os: windows-latest, dc: gdc }
+                dc: [dmd, ldc]
 
         runs-on: ${{ matrix.os }}
         steps:
@@ -27,5 +24,6 @@ jobs:
             - uses: dlang-community/setup-dlang@v2
               with:
                   compiler: ${{ matrix.dc }}
+                  dub: latest
 
             - run: dub -q test
