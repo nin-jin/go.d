@@ -6,25 +6,23 @@ Thread-pooled coroutines with [wait-free](https://en.wikipedia.org/wiki/Non-bloc
 
 * Static typed channels (but you can use [std.variant](https://dlang.org/library/std/variant.html) to transfer various data).
 * Minimal message size (no additional memory cost).
-* Wait free channels (but if you don't check for avalability/pending you will be blocked).
+* Wait free channels (but if you don't check for available/pending you will be blocked).
 * Static check for message transition safety (allowed only shared, immutable and non-copyable).
-* Every goroutine runs on thread poll (use runEventLoopOnce to use main thread too).
+* Every goroutine is thread with 4KB stack now (Fibers will be supported later).
 * Automatic finalizing queues on channel scope exit (use `empty`/`ignore` to check it).
 
 # Benchmarks
 
 ```
-> .\compare.cmd
+> ./compare
 
 >go run app.go --release
 Workers Result          Time
-4       4999500000      25.9163ms
+8       49995000000     109.7644ms
 >dub --quiet --build=release
 Workers Result          Time
-4       4999500000      116 ms
+0       49995000000     124 ms
 ```
-
-I tryed to use std.parallelism instead of vibe-code. It twice faster but don't support fibers. I tryed to mix with std.concurrency but it's too hard for me.
 
 # Moduels
 

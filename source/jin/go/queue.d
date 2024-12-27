@@ -2,12 +2,16 @@ module jin.go.queue;
 
 import std.container;
 import std.exception;
+import std.conv;
 
 import jin.go.mem;
 import jin.go.cursor;
 
 /// Wait-free one input one output queue.
-class Queue(Message)
+class Queue(
+	Message,
+	size_t Length = ( Page - __traits(classInstanceSize,Queue!( Message, 0 )) ) / Message.sizeof
+)
 {
 	/// Cursor to next free slot for message.
 	Cursor provider;
@@ -16,34 +20,22 @@ class Queue(Message)
 	Cursor consumer;
 
 	/// Ring buffer of transferring messages.
-	Array!Message messages;
-
-	/// Buffer fits to one memory page by default.
-	this(size_t size = Page / Message.sizeof - 1)
-	{
-		enforce(size > 0, "Queue size must be greater then 0");
-
-		// Ring buffer uses one additional element to defferentiate empty and full.
-		this.messages.length = size + 1;
-	}
+	Message[Length] messages;
 
 	/// Maximum count of transferring messages.
 	@property size_t size()
 	{
-		return this.messages.length - 1;
+		return Length - 1;
 	}
 
 	/// Count of provided messages.
 	/// Negative value - new messages will never provided.
 	ptrdiff_t pending() const
 	{
-		const len = this.messages.length;
-		const pending = (len - this.consumer.offset + this.provider.offset) % len;
+		const pending = (Length - this.consumer.offset + this.provider.offset) % Length;
 
 		if (pending > 0)
-		{
 			return pending;
-		}
 
 		return this.provider.finalized;
 	}
@@ -52,13 +44,10 @@ class Queue(Message)
 	/// Negative value - new messages will never provided.
 	ptrdiff_t available() const
 	{
-		const len = this.messages.length;
-		const available = (len - this.provider.offset + this.consumer.offset - 1) % len;
+		const available = (Length - this.provider.offset + this.consumer.offset - 1) % Length;
 
 		if (available > 0)
-		{
 			return available;
-		}
 
 		return this.consumer.finalized;
 	}
@@ -76,11 +65,10 @@ class Queue(Message)
 		assert(this.available > 0, "Queue is full");
 
 		const offset = this.provider.offset;
-		const len = this.messages.length;
 
 		this.messages[offset] = value;
 
-		this.provider.offset = (offset + 1) % len;
+		this.provider.offset = (offset + 1) % Length;
 	}
 
 	/// Create and put message.
@@ -111,25 +99,26 @@ class Queue(Message)
 	{
 		assert(this.pending > 0, "Queue is empty");
 
-		const offset = (this.consumer.offset + 1) % this.messages.length;
+		const offset = (this.consumer.offset + 1) % Length;
 		this.consumer.offset = offset;
 	}
+
 }
 
 /// Automatic fit buffer size to memory page size.
 unittest
 {
 	auto q1 = new Queue!int;
-	assert(q1.size == 1023);
+	assert(q1.size == 975);
 
 	auto q2 = new Queue!long;
-	assert(q2.size == 511);
+	assert(q2.size == 487);
 }
 
 /// Pending and available.
 unittest
 {
-	auto q = new Queue!int(3);
+	auto q = new Queue!(int,4);
 	assert(q.pending == 0);
 	assert(q.available == 3);
 
@@ -166,7 +155,7 @@ unittest
 {
 	import core.exception;
 
-	auto q = new Queue!int(1);
+	auto q = new Queue!int;
 	q.provider.finalize();
 
 	q.front.assertThrown!AssertError;
@@ -178,7 +167,7 @@ unittest
 {
 	import core.exception;
 
-	auto q = new Queue!int(1);
+	auto q = new Queue!(int,2);
 	q.consumer.finalize();
 	q.put(7);
 

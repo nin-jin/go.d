@@ -6,19 +6,18 @@ public import jin.go.input;
 /// Common `Queue` collections implementation.
 mixin template Channel(Message)
 {
-
-    import std.algorithm;
-    import std.container;
-
     import jin.go.queue;
 
     alias Self = typeof(this);
 
-    /// Allow transferring between tasks
-    static __isIsolatedType = true;
+    /// Allow transferring between tasks.
+    enum __isIsolatedType = true;
+
+    /// Destructor is disabled when `true`.
+    bool immortal;
 
     /// All registered Queues.
-    Array!(Queue!Message) queues;
+    Queue!Message[] queues;
 
     /// Index of current Queue.
     private size_t current;
@@ -28,20 +27,21 @@ mixin template Channel(Message)
     {
         if (this.current + 1 < this.queues.length)
         {
-            this.queues[this.current] = this.queues.removeAny();
+            this.queues[this.current] = this.queues.back;
+            this.queues.popBack;
             return;
         }
 
-        this.queues.removeBack();
+        this.queues.popBack;
         this.current = 0;
 
     }
 
     /// Makes new registered `Queue` and returns `Complement` channel.
     /// Maximum count of messages in a buffer can be provided.
-    Complement!Message pair(Args...)(Args args)
+    Complement!Message pair()
     {
-        auto queue = new Queue!Message(args);
+        auto queue = new Queue!Message;
         this.queues ~= queue;
 
         Complement!Message complement;
@@ -50,23 +50,18 @@ mixin template Channel(Message)
         return complement;
     }
 
-    /// Moves queues to movable channel of same type.
-    Self move()
-    {
-        auto movable = Self();
-        this.move(movable);
-        return movable;
-    }
-
-    /// Moves queues to another channel.
-    void move(ref Self target)
-    {
-        target.queues = this.queues.move;
-        target.current = this.current.move;
-    }
-
-    /// Prevent copy, only move.
     @disable this(this);
+
+    this( ref Self source ) {
+        this.queues ~= source.queues;
+        source.queues.length = 0;
+    }
+    
+    void opOpAssign(string op: "~")(Self source) {
+        this.queues ~= source.queues;
+        source.queues.length = 0;
+    }
+
 }
 
 /// Autofinalize and take all.
@@ -75,7 +70,7 @@ unittest
     auto ii = Input!int();
 
     {
-        auto oo = ii.pair(5);
+        auto oo = ii.pair;
 
         oo.put(7);
         oo.put(77);
@@ -90,10 +85,10 @@ unittest
     import std.algorithm;
 
     auto i1 = Input!int();
-    auto o1 = i1.pair(5);
+    auto o1 = i1.pair;
 
-    auto i2 = i1.move;
-    auto o2 = o1.move;
+    auto i2 = i1;
+    auto o2 = o1;
 
     o2.put(7);
     o2.put(77);
@@ -108,8 +103,8 @@ unittest
 {
     auto ii = Input!int();
 
-    auto o1 = ii.pair(5);
-    auto o2 = ii.pair(5);
+    auto o1 = ii.pair;
+    auto o2 = ii.pair;
 
     o1.put(7);
     o1.put(777);
@@ -127,8 +122,8 @@ unittest
 {
     auto oo = Output!int();
 
-    auto i1 = oo.pair(5);
-    auto i2 = oo.pair(5);
+    auto i1 = oo.pair;
+    auto i2 = oo.pair;
 
     oo.put(7);
     oo.put(13);

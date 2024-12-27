@@ -89,9 +89,7 @@ struct Input(Message)
         {
             const pending = this.pending.await;
             if (pending == -1)
-            {
                 return -1;
-            }
 
             auto queue = this.queues[this.current];
             foreach (i; pending.iota)
@@ -100,9 +98,7 @@ struct Input(Message)
                 queue.popFront;
 
                 if (result)
-                {
                     return result;
-                }
             }
 
         }
@@ -121,10 +117,11 @@ struct Input(Message)
     /// Fix all cursors on destroy.
     ~this()
     {
+        if (this.immortal)
+            return;
+
         foreach (queue; this.queues)
-        {
             queue.consumer.finalize();
-        }
     }
 
 }

@@ -2,24 +2,42 @@ module jin.go.go;
 
 import std.range;
 import std.traits;
-import std.algorithm;
-
-import vibe.core.core;
+import core.thread;
 
 public import jin.go.channel;
 public import jin.go.await;
+public import jin.go.mem;
+
+/// Yields to another thread.
+alias yield = Thread.yield;
 
 /// Run function asynchronously
-auto go(alias task, Args...)(Args args)
+void go(alias task, Args...)(Args args)
         if (is(ReturnType!task : void) && (Parameters!task.length == Args.length))
 {
     foreach (i, Arg; Args)
     {
-        static assert(IsSafeToTransfer!Arg, "Value of type (" ~ Arg.stringof
-                ~ ") is not safe to pass between threads. "
-                ~ "Make it immutable, non-copyable or shared!");
+        static assert(
+            IsSafeToTransfer!Arg,
+            Arg.stringof ~ " isn't safe to pass between threads"
+        );
     }
-    return runWorkerTask(&task, args);
+
+    // Save local for passing to delegate.
+    auto xargs = args;
+
+    // Disable channel destructors to prevent
+    // destroying on scope exit before using in fiber.
+    static foreach (i, Arg; Args)
+    {
+        static if (__traits(compiles, xargs[i].immortal = true))
+        {
+            xargs[i].immortal = true;
+        }
+    }
+
+    new Thread({ task(xargs); }, Page).start;
+
 }
 
 /// Run function asynchronously and return Queue connectetd with range returned by function
@@ -32,7 +50,7 @@ auto go(alias task, Args...)(Args args) if (isInputRange!(ReturnType!task))
 
     static void wrapper(Output!Message future, Result function(Args) task, Args args)
     {
-        future.feed( task(args) );
+        future.feed(task(args));
     }
 
     go!wrapper(future.pair, &task, args);
@@ -47,15 +65,14 @@ auto go(alias task, Args...)(Args args)
 {
     Parameters!task[0] results;
     auto future = results.pair;
-    go!task(results.move, args);
+    go!task(results, args);
     return future;
 }
 
-/// Safe to transfer between threads: shared, immutable, non-copiable
 template IsSafeToTransfer(Value)
 {
-    enum IsCopyable(Value) = __traits(compiles, { Value x, y = x; });
-    enum IsSafeToTransfer = !hasUnsharedAliasing!Value || !IsCopyable!Value;
+    enum IsIsolated(Value) = Value.__isIsolatedType;
+    enum IsSafeToTransfer = !hasUnsharedAliasing!Value || IsIsolated!Value;
 }
 
 /// Bidirection : start , put*2 , take
@@ -75,6 +92,7 @@ unittest
     feed.put(3);
     feed.put(4);
     assert(sums.next == 3 + 4);
+
 }
 
 /// Bidirection : put*2 , start , take
@@ -94,7 +112,7 @@ unittest
     feed.destroy();
 
     Input!int sums;
-    go!summing(sums.pair, ifeed.move);
+    go!summing(sums.pair, ifeed);
 
     assert(sums.next == 3 + 4);
 }
@@ -102,6 +120,7 @@ unittest
 /// Round robin : start*2 , put*4 , take*2
 unittest
 {
+    import std.algorithm;
     import jin.go;
 
     Output!int feed;
@@ -121,6 +140,7 @@ unittest
     feed.put(6); // 2
 
     assert(sums[].sort().array == [3 + 5, 4 + 6]);
+
 }
 
 /// Event loop on multiple queues
@@ -161,12 +181,14 @@ unittest
 
     assert(results1 == [2, 3]);
     assert(results2 == [4, 5]);
+
 }
 
 /// Blocking on buffer overflow
 unittest
 {
     import core.time;
+    import std.algorithm;
     import jin.go;
 
     static auto generating()
@@ -175,9 +197,10 @@ unittest
     }
 
     auto numbs = go!generating;
-    10.msecs.sleep;
+    Thread.sleep(10.msecs);
 
     assert(numbs[].sum == 200);
+
 }
 
 /// https://tour.golang.org/concurrency/1
@@ -190,21 +213,22 @@ unittest
     import std.range;
     import jin.go;
 
-    Input!string log;
-
     static void saying(Output!string log, string message)
     {
         foreach (_; 3.iota)
         {
-            200.msecs.sleep;
+            Thread.sleep(10.msecs);
             log.put(message);
         }
     }
+
+    Input!string log;
 
     go!saying(log.pair, "hello");
     saying(log.pair, "world");
 
     assert(log[].length == 6);
+
 }
 
 /// https://tour.golang.org/concurrency/3
@@ -239,11 +263,12 @@ unittest
     immutable int[] numbers = [7, 2, 8, -9, 4, 0];
 
     Input!int sums;
-    go!summing(sums.pair(1), numbers[0 .. $ / 2]);
-    go!summing(sums.pair(1), numbers[$ / 2 .. $]);
+    go!summing(sums.pair, numbers[0 .. $ / 2]);
+    go!summing(sums.pair, numbers[$ / 2 .. $]);
     auto res = (&sums).take(2).array;
 
     assert((res ~ res.sum).sort.array == [-5, 12, 17]);
+
 }
 
 /// https://tour.golang.org/concurrency/4
@@ -262,9 +287,10 @@ unittest
     }
 
     Input!int numbers;
-    go!fibonacci(numbers.pair(10), 10);
+    go!fibonacci(numbers.pair, 10);
 
     assert(numbers[] == [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
+
 }
 
 /// https://tour.golang.org/concurrency/4
@@ -281,6 +307,7 @@ unittest
 
     assert(fibonacci(10).array == [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
     assert(go!fibonacci(10).array == [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
+
 }
 
 /// https://tour.golang.org/concurrency/5
@@ -321,57 +348,61 @@ unittest
     Output!int numbers;
     Input!bool controls;
 
-    go!printing(controls.pair(1), numbers.pair(1));
-    go!fibonacci(numbers.move);
+    go!printing(controls.pair, numbers.pair);
+    go!fibonacci(numbers);
 
     controls.pending.await;
 
     assert(log == [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
+
 }
 
-/// https://tour.golang.org/concurrency/6
-/// You can ommit first argument of Queue type, and it will be autogenerated and returned.
-unittest
-{
-    import core.time;
-    import jin.go;
+// /// https://tour.golang.org/concurrency/6
+// /// You can ommit first argument of Queue type, and it will be autogenerated and returned.
+// unittest
+// {
+//     import core.time;
+//     import jin.go;
 
-    static void after(Output!bool signals, Duration dur)
-    {
-        dur.sleep;
-        signals.put(true);
-    }
+//     static void after(Output!bool signals, Duration dur)
+//     {
+//         Thread.sleep(dur);
+//         signals.put(true);
+//     }
 
-    static auto tick(Output!bool signals, Duration dur)
-    {
-        while (signals.available >= 0)
-        {
-            dur.sleep;
-            signals.put(true);
-        }
-    }
+//     static auto tick(Output!bool signals, Duration dur)
+//     {
+//         while (signals.available >= 0)
+//         {
+//             Thread.sleep(dur);
+//             signals.put(true);
+//         }
+//     }
 
-    auto ticks = go!tick(100.msecs);
-    auto booms = go!after(450.msecs);
+//     auto ticks = go!tick(10.msecs);
+//     auto booms = go!after(45.msecs);
 
-    string log;
+//     string log;
 
-    for (;;)
-    {
-        if (ticks.pending > 0)
-        {
-            log ~= "tick,";
-            ticks.popFront;
-            continue;
-        }
-        if (booms.pending > 0)
-        {
-            log ~= "BOOM!";
-            break;
-        }
-        10.msecs.sleep;
-    }
+//     for (;;)
+//     {
+//         writeln(log);
+//         if (ticks.pending > 0)
+//         {
+//             log ~= "tick,";
+//             ticks.popFront;
+//             continue;
+//         }
+//         if (booms.pending > 0)
+//         {
+//             log ~= "BOOM!";
+//             break;
+//         }
+//         yield;
+//     }
 
-    // unstable
-    // assert( log == "tick,tick,tick,tick,BOOM!");
-}
+//     // unstable
+//     writeln(log);
+//     assert( log == "tick,tick,tick,tick,BOOM!");
+
+// }

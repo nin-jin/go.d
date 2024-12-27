@@ -29,9 +29,7 @@ struct Output(Message)
 
             const available2 = queue.available;
             if (available2 > 0)
-            {
                 return available2;
-            }
 
             // skip full queue
             if (available2 < 0)
@@ -95,10 +93,11 @@ struct Output(Message)
     /// Finalizes all cursors on destroy.
     ~this()
     {
+        if (this.immortal)
+            return;
+
         foreach (queue; this.queues)
-        {
             queue.provider.finalize();
-        }
     }
 
 }

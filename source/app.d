@@ -1,52 +1,38 @@
+module app;
+
 import std.datetime.stopwatch;
 import std.range;
 import std.stdio;
-import vibe.core.core;
+import std.algorithm;
 
 import jin.go;
 
 enum long iterations = 10_000;
-enum long threads = 100;
-enum KB = 1024;
-enum MB = 1024 * KB;
+enum long threads = 1000;
 
 static auto produce()
 {
 	return iterations.iota;
 }
 
-static auto consume(Output!long sums, Input!long numbers)
+static auto consume(Input!long numbers)
 {
-	long s;
-	foreach (n; numbers)
-		s += n;
-	sums.put(s);
+	return [numbers.fold!q{a+b}];
 }
 
 void main()
 {
-	runTask({
-		auto timer = StopWatch(AutoStart.yes);
+	auto timer = StopWatch(AutoStart.yes);
 
-		Input!long sums;
-		foreach (i; threads.iota)
-		{
-			sums.pair(1).go!consume(go!produce);
-		}
+	Input!long sums;
+	for (auto i = 0; i < threads; ++i)
+		sums ~= go!consume(go!produce);
 
-		long sumsums;
-		foreach (s; sums)
-		{
-			sumsums += s;
-		}
+	long sumsums = sums.fold!q{a+b};
 
-		timer.stop();
+	timer.stop();
 
-		writeln("Workers\tResult\t\tTime");
-		writeln(workerThreadCount, "\t", sumsums, "\t", timer.peek.total!"msecs", " ms");
-
-	});
-
-	runEventLoopOnce();
+	writeln("Workers\tResult\t\tTime");
+	writeln(0, "\t", sumsums, "\t", timer.peek.total!"msecs", " ms");
 
 }

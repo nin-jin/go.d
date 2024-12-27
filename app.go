@@ -22,7 +22,7 @@ func consume(ints <-chan int64, sums chan<- int64) {
 }
 
 func main() {
-	threads := 100
+	threads := 1000
 
 	t0 := time.Now()
 

@@ -16,7 +16,7 @@ align(Line) struct Cursor
     /// Offset in buffer.
     size_t offset() const
     {
-        return this._offset.atomicLoad!acquire;
+        return this._offset;
     }
 
     /// Offset in buffer. Can't be changed when finalized.
@@ -32,7 +32,7 @@ align(Line) struct Cursor
     /// Finalized cursor shall never change offset.
     ptrdiff_t finalized() const
     {
-        return this._finalized.atomicLoad!acquire;
+        return this._finalized;
     }
 
     /// Finalize cursor to prevent offset changes.
