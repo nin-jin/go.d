@@ -37,17 +37,17 @@ mixin template Channel(Message)
 
     }
 
-    /// Makes new registered `Queue` and returns `Complement` channel.
+    /// Makes new registered `Queue` and returns `Pair` channel.
     /// Maximum count of messages in a buffer can be provided.
-    Complement!Message pair()
+    Pair!Message pair()
     {
         auto queue = new Queue!Message;
         this.queues ~= queue;
 
-        Complement!Message complement;
-        complement.queues ~= queue;
+        Pair!Message pair;
+        pair.queues ~= queue;
 
-        return complement;
+        return pair;
     }
 
     @disable this(this);

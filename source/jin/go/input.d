@@ -10,7 +10,7 @@ import std.range;
 /// Implements InputRange.
 struct Input(Message)
 {
-    alias Complement = Output;
+    alias Pair = Output;
 
     mixin Channel!Message;
 
