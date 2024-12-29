@@ -8,7 +8,9 @@ alias release = MemoryOrder.rel;
 import jin.go.mem;
 
 /// Atomic buffer cursor.
-align(Line) struct Cursor
+/// Aligned to prevent cores conflict.
+/// Two lines (128B) because prefetching.
+align(2*Line) struct Cursor
 {
     /// Offset in buffer.
     private shared size_t _offset;
