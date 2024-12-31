@@ -109,10 +109,10 @@ class Queue(
 unittest
 {
 	auto q1 = new Queue!int;
-	assert(q1.size == 975);
+	assert(q1.size == 927);
 
 	auto q2 = new Queue!long;
-	assert(q2.size == 487);
+	assert(q2.size == 463);
 }
 
 /// Pending and available.
