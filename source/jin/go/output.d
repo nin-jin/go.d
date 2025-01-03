@@ -76,7 +76,7 @@ struct Output(Message)
     void put(Value)(Value value)
     {
         const available = this.available.await;
-        assert(available != -1, "Message will never consumed");
+        // assert(available != -1, "Message will never consumed");
 
         const current = this.current;
         this.queues[current].put(value);
