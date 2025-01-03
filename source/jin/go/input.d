@@ -89,7 +89,7 @@ struct Input(Message)
         {
             const pending = this.pending.await;
             if (pending == -1)
-                return -1;
+                return 0;
 
             auto queue = this.queues[this.current];
             foreach (i; pending.iota)
