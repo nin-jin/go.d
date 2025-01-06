@@ -97,7 +97,7 @@ struct Output(Message)
             return;
 
         foreach (queue; this.queues)
-            queue.provider.finalize();
+            queue.producer.finalize();
     }
 
 }

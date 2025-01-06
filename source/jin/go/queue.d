@@ -9,12 +9,14 @@ import jin.go.cursor;
 
 /// Wait-free one input one output queue.
 class Queue(
+	/// Size must be less than Page/2
 	Message,
-	size_t Length = ( Page - __traits(classInstanceSize,Queue!( Message, 0 )) ) / Message.sizeof
+	/// By default 1 Page size
+	size_t Length = (Page - __traits(classInstanceSize, Queue!(Message, 0))) / Message.sizeof
 )
 {
 	/// Cursor to next free slot for message.
-	Cursor provider;
+	Cursor producer;
 
 	/// Cursor to next not received message.
 	Cursor consumer;
@@ -28,12 +30,12 @@ class Queue(
 		return Length - 1;
 	}
 
-	/// Count of provided messages.
-	/// Negative value - new messages will never provided.
+	/// Count of produced messages.
+	/// Negative value - new messages will never produced.
 	ptrdiff_t pending() const
 	{
-		const fin = this.provider.finalized;
-		const pending = (Length - this.consumer.offset + this.provider.offset) % Length;
+		const fin = this.producer.finalized;
+		const pending = (Length - this.consumer.offset + this.producer.offset) % Length;
 
 		if (pending > 0)
 			return pending;
@@ -42,19 +44,17 @@ class Queue(
 	}
 
 	/// Count of messages to fulfill buffer.
-	/// Negative value - new messages will never provided.
+	/// Negative value - new messages will never produced.
 	ptrdiff_t available() const
 	{
-		const fin = this.consumer.finalized;
-		const available = (Length - this.provider.offset + this.consumer.offset - 1) % Length;
+		if (this.consumer.finalized == -1)
+			return -1;
 
-		if (available > 0)
-			return available;
+		return (Length - this.producer.offset + this.consumer.offset - 1) % Length;
 
-		return fin;
 	}
 
-	/// True when no more messages can never be provided.
+	/// True when no more messages can never be produced.
 	bool ignore()
 	{
 		return this.available < 0;
@@ -64,13 +64,14 @@ class Queue(
 	/// `available` must be checked before.
 	void put(Value)(Value value)
 	{
-		assert(this.available > 0, "Queue is full");
+		if (this.available <= 0)
+			return;
 
-		const offset = this.provider.offset;
+		const offset = this.producer.offset;
 
 		this.messages[offset] = value;
 
-		this.provider.offset = (offset + 1) % Length;
+		this.producer.offset = (offset + 1) % Length;
 	}
 
 	/// Create and put message.
@@ -120,7 +121,7 @@ unittest
 /// Pending and available.
 unittest
 {
-	auto q = new Queue!(int,4);
+	auto q = new Queue!(int, 4);
 	assert(q.pending == 0);
 	assert(q.available == 3);
 
@@ -158,22 +159,25 @@ unittest
 	import core.exception;
 
 	auto q = new Queue!int;
-	q.provider.finalize();
+	q.producer.finalize();
 
 	q.front.assertThrown!AssertError;
 	q.popFront.assertThrown!AssertError;
 }
 
-/// Provide to full is forbidden.
+/// Produce to full is ignored.
 unittest
 {
 	import core.exception;
+	import std.array;
 
-	auto q = new Queue!(int,2);
-	q.consumer.finalize();
-	q.put(7);
+	auto q = new Queue!(int, 2);
+	q.put(1);
+	q.put(2);
+	q.put(3);
+	q.producer.finalize;
 
-	q.put(77).assertThrown!AssertError;
+	assert(q.array == [1], "Broken Queue after put to full");
 }
 
 /// Make struct inside put.

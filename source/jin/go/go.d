@@ -36,7 +36,7 @@ void go(alias task, Args...)(Args args)
         }
     }
 
-    new Thread({ task(xargs); }, Page).start;
+    new Thread({ task(xargs); }).start;
 
 }
 
@@ -232,7 +232,7 @@ unittest
 }
 
 /// https://tour.golang.org/concurrency/3
-/// Queue is one-consumer-one-provider wait-free typed queue with InputRange and OutputRange interfaces support.
+/// Queue is one-consumer-one-producer wait-free typed queue with InputRange and OutputRange interfaces support.
 /// Use "next" property to send and receive messages;
 unittest
 {
@@ -364,10 +364,10 @@ unittest
 //     import core.time;
 //     import jin.go;
 
-//     static void after(Output!bool signals, Duration dur)
+//     static auto after(Duration dur)
 //     {
 //         Thread.sleep(dur);
-//         signals.put(true);
+//         return [true];
 //     }
 
 //     static auto tick(Output!bool signals, Duration dur)
@@ -386,7 +386,6 @@ unittest
 
 //     for (;;)
 //     {
-//         writeln(log);
 //         if (ticks.pending > 0)
 //         {
 //             log ~= "tick,";
@@ -402,7 +401,6 @@ unittest
 //     }
 
 //     // unstable
-//     writeln(log);
 //     assert( log == "tick,tick,tick,tick,BOOM!");
 
 // }

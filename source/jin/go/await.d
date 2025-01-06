@@ -9,10 +9,8 @@ auto await(Result)(lazy Result check)
     {
         auto value = check;
 
-        if (value != 0)
-        {
+        if (value)
             return value;
-        }
 
         Thread.yield;
     }
