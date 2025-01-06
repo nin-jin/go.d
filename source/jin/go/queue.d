@@ -32,24 +32,26 @@ class Queue(
 	/// Negative value - new messages will never provided.
 	ptrdiff_t pending() const
 	{
+		const fin = this.provider.finalized;
 		const pending = (Length - this.consumer.offset + this.provider.offset) % Length;
 
 		if (pending > 0)
 			return pending;
 
-		return this.provider.finalized;
+		return fin;
 	}
 
 	/// Count of messages to fulfill buffer.
 	/// Negative value - new messages will never provided.
 	ptrdiff_t available() const
 	{
+		const fin = this.consumer.finalized;
 		const available = (Length - this.provider.offset + this.consumer.offset - 1) % Length;
 
 		if (available > 0)
 			return available;
 
-		return this.consumer.finalized;
+		return fin;
 	}
 
 	/// True when no more messages can never be provided.
