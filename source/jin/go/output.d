@@ -61,7 +61,7 @@ struct Output(Message)
             if (!available)
             {
                 available = this.available.await;
-                assert(available != -1, "Message will never consumed");
+                // assert(available != -1, "Message will never consumed");
             }
 
             const current = this.current;

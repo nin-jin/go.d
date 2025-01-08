@@ -57,7 +57,7 @@ struct Input(Message)
     Message front()
     {
         const pending = this.pending.await;
-        assert(pending != -1, "Message will never be provided");
+        assert(pending != -1, "Message will never be produced");
 
         return this.queues[this.current].front;
     }

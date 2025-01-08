@@ -1,9 +1,11 @@
 module jin.go.cursor;
 
+// atomicLoad & atomicStore uses CAS instead of mem bariers.
+// But this is still faster than memoryFence.
 import core.atomic;
 
-alias acquire = MemoryOrder.acq;
-alias release = MemoryOrder.rel;
+alias acquire = MemoryOrder.acq; // Load | *
+alias release = MemoryOrder.rel; // * | Store
 
 import jin.go.mem;
 
@@ -13,7 +15,7 @@ import jin.go.mem;
 align(2*Line) struct Cursor
 {
     /// Offset in buffer.
-    private shared size_t _offset;
+    private size_t _offset;
 
     /// Offset in buffer.
     size_t offset() const
@@ -25,21 +27,22 @@ align(2*Line) struct Cursor
     void offset(size_t next)
     {
         assert(this._finalized == 0, "Change offset of finalized cursor");
-        this._offset.atomicStore!release(next);
+        this._offset.atomicStore!release = next;
     }
 
     /// Finalized cursor shall never change offset.
-    private shared ptrdiff_t _finalized;
+    private ptrdiff_t _finalized;
 
     /// Finalized cursor shall never change offset.
     ptrdiff_t finalized() const
     {
-        return this._finalized.atomicLoad!acquire;
+        return this._finalized;
     }
 
     /// Finalize cursor to prevent offset changes.
     void finalize()
     {
-        this._finalized.atomicStore!release(-1);
+        this._finalized = -1;
     }
+    
 }

@@ -26,7 +26,7 @@ void main()
 
 	Input!long sums;
 	for (auto i = 0; i < threads; ++i)
-		sums ~= go!consume(go!produce);
+		sums ~= go!produce.go!consume;
 
 	long sumsums = sums.fold!q{a+b};
 
