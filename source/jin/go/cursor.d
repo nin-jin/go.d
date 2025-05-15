@@ -1,6 +1,7 @@
 module jin.go.cursor;
 
-// atomicLoad & atomicStore uses CAS instead of mem bariers.
+// atomicLoad & atomicStore uses CAS now instead of mem bariers:
+// https://github.com/dlang/dmd/blob/master/druntime/src/core/internal/atomic.d
 // But this is still faster than memoryFence.
 import core.atomic;
 
