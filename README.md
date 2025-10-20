@@ -18,10 +18,10 @@ Thread-pooled coroutines with [wait-free](https://en.wikipedia.org/wiki/Non-bloc
 
 >go run app.go --release
 Workers Result          Time
-8       49995000000     109.7644ms
+4       49995000000     238.7403ms
 >dub --quiet --build=release
 Workers Result          Time
-0       49995000000     124 ms
+4       49995000000     93 ms
 ```
 
 # Moduels

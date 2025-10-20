@@ -2,14 +2,25 @@ module jin.go.go;
 
 import std.range;
 import std.traits;
-import core.thread;
 
 public import jin.go.channel;
 public import jin.go.await;
 public import jin.go.mem;
 
-/// Yields to another thread.
-alias yield = Thread.yield;
+import photon;
+
+shared static this() {
+	initPhoton;
+}
+shared static ~this() {
+	runScheduler;
+}
+
+/// Yields to another fiber
+alias yield = photon.yield;
+
+/// Fiber pool workers count
+alias workers = photon.schedulerThreads;
 
 /// Run function asynchronously
 void go(alias task, Args...)(Args args)
@@ -36,7 +47,7 @@ void go(alias task, Args...)(Args args)
         }
     }
 
-    new Thread({ task(xargs); }).start;
+    photon.go({ task(xargs); });
 
 }
 

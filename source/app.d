@@ -10,29 +10,29 @@ import jin.go;
 enum long iterations = 10_000;
 enum long threads = 1000;
 
-static auto produce()
-{
+static auto produce() {
 	return iterations.iota;
 }
 
-static auto consume(Input!long numbers)
-{
+static auto consume(Input!long numbers) {
 	return [numbers.fold!q{a+b}];
 }
 
-void main()
-{
-	auto timer = StopWatch(AutoStart.yes);
+void main() {
+	go!({
 
-	Input!long sums;
-	for (auto i = 0; i < threads; ++i)
-		sums ~= go!produce.go!consume;
+		auto timer = StopWatch(AutoStart.yes);
 
-	long sumsums = sums.fold!q{a+b};
+		Input!long sums;
+		for (auto i = 0; i < threads; ++i)
+			sums ~= go!produce.go!consume;
 
-	timer.stop();
+		long sumsums = sums.fold!q{a+b};
 
-	writeln("Workers\tResult\t\tTime");
-	writeln(0, "\t", sumsums, "\t", timer.peek.total!"msecs", " ms");
+		timer.stop();
 
+		writeln("Workers\tResult\t\tTime");
+		writeln(workers, "\t", sumsums, "\t", timer.peek.total!"msecs", " ms");
+
+	});
 }
