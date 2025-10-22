@@ -18,10 +18,16 @@ shared static ~this() {
 
 /// Runs root task which stops app at the end
 void root( void delegate() task ) {
-    go!({
+    runPhoton({
+        
         task();
-        import  core.stdc.stdlib;
-        exit(0); // Workaround https://github.com/nin-jin/go.d/issues/7#issuecomment-3424018569
+        
+        version( unittest ) {
+        } else {
+            import  core.stdc.stdlib;
+            exit(0); // Workaround https://github.com/nin-jin/go.d/issues/7#issuecomment-3424018569
+        }
+        
     });
 }
 
@@ -96,331 +102,356 @@ template IsSafeToTransfer(Value)
 }
 
 /// Bidirection : start , put*2 , take
-unittest
-{
-    import jin.go;
+unittest {
+    root({
+        import jin.go;
 
-    static void summing(Output!int sums, Input!int feed)
-    {
-        sums.put(feed.next + feed.next);
-    }
+        static void summing(Output!int sums, Input!int feed)
+        {
+            sums.put(feed.next + feed.next);
+        }
 
-    Output!int feed;
-    Input!int sums;
-    go!summing(sums.pair, feed.pair);
+        Output!int feed;
+        Input!int sums;
+        go!summing(sums.pair, feed.pair);
 
-    feed.put(3);
-    feed.put(4);
-    assert(sums.next == 3 + 4);
+        feed.put(3);
+        feed.put(4);
+        assert(sums.next == 3 + 4);
 
+    });
 }
 
 /// Bidirection : put*2 , start , take
-unittest
-{
-    import jin.go;
+unittest {
+    root({
+        import jin.go;
 
-    static void summing(Output!int sums, Input!int feed)
-    {
-        sums.put(feed.next + feed.next);
-    }
+        static void summing(Output!int sums, Input!int feed)
+        {
+            sums.put(feed.next + feed.next);
+        }
 
-    Output!int feed;
-    auto ifeed = feed.pair;
-    feed.put(3);
-    feed.put(4);
-    feed.destroy();
+        Output!int feed;
+        auto ifeed = feed.pair;
+        feed.put(3);
+        feed.put(4);
+        feed.destroy();
 
-    Input!int sums;
-    go!summing(sums.pair, ifeed);
+        Input!int sums;
+        go!summing(sums.pair, ifeed);
 
-    assert(sums.next == 3 + 4);
+        assert(sums.next == 3 + 4);
+        
+    });
 }
 
 /// Round robin : start*2 , put*4 , take*2
-unittest
-{
-    import std.algorithm;
-    import jin.go;
+unittest {
+    root({
+        
+        import std.algorithm;
+        import jin.go;
 
-    Output!int feed;
-    Input!int sums;
+        Output!int feed;
+        Input!int sums;
 
-    static void summing(Output!int sums, Input!int feed)
-    {
-        sums.put(feed.next + feed.next);
-    }
+        static void summing(Output!int sums, Input!int feed)
+        {
+            sums.put(feed.next + feed.next);
+        }
 
-    go!summing(sums.pair, feed.pair);
-    go!summing(sums.pair, feed.pair);
+        go!summing(sums.pair, feed.pair);
+        go!summing(sums.pair, feed.pair);
 
-    feed.put(3); // 1
-    feed.put(4); // 2
-    feed.put(5); // 1
-    feed.put(6); // 2
+        feed.put(3); // 1
+        feed.put(4); // 2
+        feed.put(5); // 1
+        feed.put(6); // 2
+        // feed.destroy();
 
-    assert(sums[].sort().array == [3 + 5, 4 + 6]);
-
+        assert(sums[].sort().array == [3 + 5, 4 + 6]);
+        
+    });
 }
 
 /// Event loop on multiple queues
-unittest
-{
-    import jin.go;
+unittest {
+    root({
+        import jin.go;
 
-    static void generating1(Output!int numbs)
-    {
-        numbs.put(2);
-        numbs.put(3);
-    }
-
-    static void generating2(Output!long numbs)
-    {
-        numbs.put(4);
-        numbs.put(5);
-    }
-
-    auto numbs1 = go!generating1;
-    auto numbs2 = go!generating2;
-
-    int[] results1;
-    long[] results2;
-
-    while (!numbs1.empty || !numbs2.empty)
-    {
-        if (numbs1.pending > 0)
+        static void generating1(Output!int numbs)
         {
-            results1 ~= numbs1.next;
+            numbs.put(2);
+            numbs.put(3);
         }
-        if (numbs2.pending > 0)
+
+        static void generating2(Output!long numbs)
         {
-            results2 ~= numbs2.next;
-            continue;
+            numbs.put(4);
+            numbs.put(5);
         }
-    }
 
-    assert(results1 == [2, 3]);
-    assert(results2 == [4, 5]);
+        auto numbs1 = go!generating1;
+        auto numbs2 = go!generating2;
 
+        int[] results1;
+        long[] results2;
+
+        while (!numbs1.empty || !numbs2.empty)
+        {
+            if (numbs1.pending > 0)
+            {
+                results1 ~= numbs1.next;
+            }
+            if (numbs2.pending > 0)
+            {
+                results2 ~= numbs2.next;
+                continue;
+            }
+        }
+
+        assert(results1 == [2, 3]);
+        assert(results2 == [4, 5]);
+
+    });
 }
 
 /// Blocking on buffer overflow
-unittest
-{
-    import core.time;
-    import std.algorithm;
-    import jin.go;
+unittest {
+    root({
+        
+        import core.time;
+        import std.algorithm;
+        import jin.go;
 
-    static auto generating()
-    {
-        return 1.repeat.take(200);
-    }
+        static auto generating()
+        {
+            return 1.repeat.take(200);
+        }
 
-    auto numbs = go!generating;
-    Thread.sleep(10.msecs);
+        auto numbs = go!generating;
+        Thread.sleep(10.msecs);
 
-    assert(numbs[].sum == 200);
+        assert(numbs[].sum == 200);
 
+    });
 }
 
 /// https://tour.golang.org/concurrency/1
 /// "go" template starts function in new asynchronous coroutine
 /// Coroutines starts in thread pool and may be executed in parallel threads.
 /// Only thread safe values can be passed to function.
-unittest
-{
-    import core.time;
-    import std.range;
-    import jin.go;
+unittest {
+    root({
+    
+        import core.time;
+        import std.range;
+        import jin.go;
 
-    static void saying(Output!string log, string message)
-    {
-        foreach (_; 3.iota)
+        static void saying(Output!string log, string message)
         {
-            Thread.sleep(10.msecs);
-            log.put(message);
+            foreach (_; 3.iota)
+            {
+                Thread.sleep(10.msecs);
+                log.put(message);
+            }
         }
-    }
 
-    Input!string log;
+        Input!string log;
 
-    go!saying(log.pair, "hello");
-    saying(log.pair, "world");
+        go!saying(log.pair, "hello");
+        saying(log.pair, "world");
 
-    assert(log[].length == 6);
+        assert(log[].length == 6);
 
+    });
 }
 
 /// https://tour.golang.org/concurrency/3
 /// Queue is one-consumer-one-producer wait-free typed queue with InputRange and OutputRange interfaces support.
 /// Use "next" property to send and receive messages;
-unittest
-{
-    import jin.go;
+unittest {
+    root({
+        import jin.go;
 
-    Output!int output;
-    auto input = output.pair;
-    output.put(1);
-    output.put(2);
-    assert(input.next == 1);
-    assert(input.next == 2);
+        Output!int output;
+        auto input = output.pair;
+        
+        output.put(1);
+        output.put(2);
+        
+        assert(input.next == 1);
+        assert(input.next == 2);
+        
+    });
 }
 
 /// https://tour.golang.org/concurrency/2
 /// Inputs is round robin input Queue list with InputRange and Queue interfaces support.
 /// Method "pair" creates new Queue for every coroutine
-unittest
-{
-    import std.algorithm;
-    import std.range;
-    import jin.go;
+unittest {
+    root({
+    
+        import std.algorithm;
+        import std.range;
+        import jin.go;
 
-    static auto summing(Output!int sums, const int[] numbers)
-    {
-        sums.put(numbers.sum);
-    }
+        static auto summing(Output!int sums, const int[] numbers)
+        {
+            sums.put(numbers.sum);
+        }
 
-    immutable int[] numbers = [7, 2, 8, -9, 4, 0];
+        immutable int[] numbers = [7, 2, 8, -9, 4, 0];
 
-    Input!int sums;
-    go!summing(sums.pair, numbers[0 .. $ / 2]);
-    go!summing(sums.pair, numbers[$ / 2 .. $]);
-    auto res = (&sums).take(2).array;
+        Input!int sums;
+        go!summing(sums.pair, numbers[0 .. $ / 2]);
+        go!summing(sums.pair, numbers[$ / 2 .. $]);
+        auto res = (&sums).take(2).array;
 
-    assert((res ~ res.sum).sort.array == [-5, 12, 17]);
+        assert((res ~ res.sum).sort.array == [-5, 12, 17]);
 
+    });
 }
 
 /// https://tour.golang.org/concurrency/4
 /// You can iterate over Queue by "foreach" like InputRange, and all standart algorithms support this.
 /// Use "close" method to notify about no more data.
-unittest
-{
-    import std.range;
-    import jin.go;
+unittest {
+    root({
+        
+        import std.range;
+        import jin.go;
 
-    static auto fibonacci(Output!int numbers, size_t count)
-    {
-        auto range = recurrence!q{ a[n-1] + a[n-2] }(0, 1).take(count);
-        foreach (x; range)
-            numbers.put(x);
-    }
+        static auto fibonacci(Output!int numbers, size_t count)
+        {
+            auto range = recurrence!q{ a[n-1] + a[n-2] }(0, 1).take(count);
+            foreach (x; range)
+                numbers.put(x);
+        }
 
-    Input!int numbers;
-    go!fibonacci(numbers.pair, 10);
+        Input!int numbers;
+        go!fibonacci(numbers.pair, 10);
 
-    assert(numbers[] == [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
-
+        assert(numbers[] == [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
+        
+    });
 }
 
 /// https://tour.golang.org/concurrency/4
 /// Function can return InputRange and it will be automatically converted to input Queue.
-unittest
-{
-    import std.range;
-    import jin.go;
+unittest {
+    root({
+        
+        import std.range;
+        import jin.go;
 
-    static auto fibonacci(int limit)
-    {
-        return recurrence!q{ a[n-1] + a[n-2] }(0, 1).take(limit);
-    }
+        static auto fibonacci(int limit)
+        {
+            return recurrence!q{ a[n-1] + a[n-2] }(0, 1).take(limit);
+        }
 
-    assert(fibonacci(10).array == [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
-    assert(go!fibonacci(10).array == [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
-
+        assert(fibonacci(10).array == [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
+        assert(go!fibonacci(10).array == [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
+        
+    });
 }
 
 /// https://tour.golang.org/concurrency/5
 /// Use custom loop to watch multiple Queues as you want.
 /// Provider can be slave by using "needed" property.
 /// Use "yield" to allow other coroutines executed between cycles.
-unittest
-{
-    import std.range;
-    import jin.go;
+unittest {
+    root({
+        
+        import std.range;
+        import jin.go;
 
-    __gshared int[] log;
+        __gshared int[] log;
 
-    static auto fibonacci(Output!int numbers)
-    {
-        auto range = recurrence!q{ a[n-1] + a[n-2] }(0, 1);
-
-        foreach (num; range)
+        static auto fibonacci(Output!int numbers)
         {
-            numbers.put(num);
+            auto range = recurrence!q{ a[n-1] + a[n-2] }(0, 1);
 
-            if (numbers.available == -1)
+            foreach (num; range)
             {
-                break;
+                numbers.put(num);
+
+                if (numbers.available == -1)
+                {
+                    break;
+                }
+            }
+
+        }
+
+        static void printing(Output!bool controls, Input!int numbers)
+        {
+            foreach (i; 10.iota)
+            {
+                log ~= numbers.next;
             }
         }
 
-    }
+        Output!int numbers;
+        Input!bool controls;
 
-    static void printing(Output!bool controls, Input!int numbers)
-    {
-        foreach (i; 10.iota)
-        {
-            log ~= numbers.next;
-        }
-    }
+        go!printing(controls.pair, numbers.pair);
+        go!fibonacci(numbers);
 
-    Output!int numbers;
-    Input!bool controls;
+        controls.pending.await;
 
-    go!printing(controls.pair, numbers.pair);
-    go!fibonacci(numbers);
-
-    controls.pending.await;
-
-    assert(log == [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
-
+        assert(log == [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]);
+    
+    });
 }
 
 // /// https://tour.golang.org/concurrency/6
 // /// You can ommit first argument of Queue type, and it will be autogenerated and returned.
-// unittest
-// {
-//     import core.time;
-//     import jin.go;
+// unittest {
+//     root({
+        
+//         import core.time;
+//         import jin.go;
 
-//     static auto after(Duration dur)
-//     {
-//         Thread.sleep(dur);
-//         return [true];
-//     }
-
-//     static auto tick(Output!bool signals, Duration dur)
-//     {
-//         while (signals.available >= 0)
+//         static auto after(Duration dur)
 //         {
 //             Thread.sleep(dur);
-//             signals.put(true);
+//             return [true];
 //         }
-//     }
 
-//     auto ticks = go!tick(10.msecs);
-//     auto booms = go!after(45.msecs);
-
-//     string log;
-
-//     for (;;)
-//     {
-//         if (ticks.pending > 0)
+//         static auto tick(Output!bool signals, Duration dur)
 //         {
-//             log ~= "tick,";
-//             ticks.popFront;
-//             continue;
+//             while (signals.available >= 0)
+//             {
+//                 Thread.sleep(dur);
+//                 signals.put(true);
+//             }
 //         }
-//         if (booms.pending > 0)
+
+//         auto ticks = go!tick(10.msecs);
+//         auto booms = go!after(45.msecs);
+
+//         string log;
+
+//         for (;;)
 //         {
-//             log ~= "BOOM!";
-//             break;
+//             if (ticks.pending > 0)
+//             {
+//                 log ~= "tick,";
+//                 ticks.popFront;
+//                 continue;
+//             }
+//             if (booms.pending > 0)
+//             {
+//                 log ~= "BOOM!";
+//                 break;
+//             }
+//             yield;
 //         }
-//         yield;
-//     }
 
-//     // unstable
-//     assert( log == "tick,tick,tick,tick,BOOM!");
+//         // unstable
+//         assert( log == "tick,tick,tick,tick,BOOM!");
 
+//     });
 // }
