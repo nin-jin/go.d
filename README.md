@@ -21,7 +21,7 @@ Workers Result          Time
 4       49995000000     238.7403ms
 >dub --quiet --build=release
 Workers Result          Time
-4       49995000000     93 ms
+4       49995000000     91 ms
 ```
 
 # Moduels

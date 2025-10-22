@@ -9,6 +9,8 @@ auto await(Result)(lazy Result check) {
 
         if (value)
             return value;
+            
+        enforce( Task.getThis(), "Await out of Task" );
 
         yield;
     }

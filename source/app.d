@@ -19,7 +19,7 @@ static auto consume(Input!long numbers) {
 }
 
 void main() {
-	go!({
+	root({
 
 		auto timer = StopWatch(AutoStart.yes);
 

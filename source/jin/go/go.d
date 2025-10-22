@@ -16,6 +16,15 @@ shared static ~this() {
 	runScheduler;
 }
 
+/// Runs root task which stops app at the end
+void root( void delegate() task ) {
+    go!({
+        task();
+        import  core.stdc.stdlib;
+        exit(0); // Workaround https://github.com/nin-jin/go.d/issues/7#issuecomment-3424018569
+    });
+}
+
 /// Yields to another fiber
 alias yield = photon.yield;
 
