@@ -6,7 +6,7 @@
 	"dependencies": {
 		"photon": "~>0.18.9"
 	},
-	"description": "Thread-pooled coroutines with lock-free staticaly typed communication channels",
+	"description": "Thread-pooled coroutines with wait-free staticaly typed communication channels",
 	"license": "public domain",
 	"name": "jin-go"
 }
