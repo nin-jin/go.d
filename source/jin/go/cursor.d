@@ -1,7 +1,8 @@
 module jin.go.cursor;
 
-// atomicLoad & atomicStore uses CAS instead of mem bariers.
-// But this is still faster than memoryFence.
+// atomicLoad & atomicStore uses CAS-cycle in DMD now instead of mem bariers:
+// https://github.com/dlang/dmd/blob/master/druntime/src/core/internal/atomic.d
+// But this is still faster than memoryFence. But GDC uses intrinsics.
 import core.atomic;
 
 alias acquire = MemoryOrder.acq; // Load | *

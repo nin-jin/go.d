@@ -1,14 +1,13 @@
 # Go.d
 
-Thread-pooled coroutines with [wait-free](https://en.wikipedia.org/wiki/Non-blocking_algorithm#Wait-freedom) staticaly typed autofinalizable communication channels.
+Stackfull coroutines with [wait-free](https://en.wikipedia.org/wiki/Non-blocking_algorithm#Wait-freedom) staticaly typed autofinalizable communication channels.
 
 # Features
 
 * Static typed channels (but you can use [std.variant](https://dlang.org/library/std/variant.html) to transfer various data).
-* Minimal message size (no additional memory cost).
 * Wait free channels (but if you don't check for available/pending you will be blocked).
-* Static check for message transition safety (allowed only shared, immutable and non-copyable).
-* Every goroutine is thread with 4KB stack now (Fibers will be supported later).
+* Static check for message transition safety.
+* Every goroutine have 20KB cost.
 * Automatic finalizing queues on channel scope exit (use `empty`/`ignore` to check it).
 
 # Benchmarks

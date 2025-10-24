@@ -7,31 +7,30 @@ import std.conv;
 import jin.go.mem;
 import jin.go.cursor;
 
-/// Wait-free one input one output queue.
+/// Wait-free 1-producer/1-concumer queue.
 class Queue(
-	/// Size must be less than Page/2
 	Message,
 	/// By default 1 Page size
 	size_t Length = (Page - __traits(classInstanceSize, Queue!(Message, 0))) / Message.sizeof
-)
+) if( Message.sizeof < Page / 2 )
 {
-	/// Cursor to next free slot for message.
+	/// Offset of next free slot.
 	Cursor producer;
 
-	/// Cursor to next not received message.
+	/// Offset of next pending message.
 	Cursor consumer;
 
 	/// Ring buffer of transferring messages.
 	Message[Length] messages;
 
-	/// Maximum count of transferring messages.
+	/// Maximum queue capacity.
 	@property size_t size()
 	{
 		return Length - 1;
 	}
 
-	/// Count of produced messages.
-	/// Negative value - new messages will never produced.
+	/// Count of pending messages.
+	/// Negative value - no one message will be produced.
 	ptrdiff_t pending() const
 	{
 		const fin = this.producer.finalized;
@@ -43,8 +42,8 @@ class Queue(
 		return fin;
 	}
 
-	/// Count of messages to fulfill buffer.
-	/// Negative value - new messages will never produced.
+	/// Count of available free slots.
+	/// Negative value - no one message will be consumed.
 	ptrdiff_t available() const
 	{
 		if (this.consumer.finalized == -1)
@@ -54,14 +53,14 @@ class Queue(
 
 	}
 
-	/// True when no more messages can never be produced.
+	/// True when no more messages can be produced ever.
 	bool ignore()
 	{
 		return this.available < 0;
 	}
 
 	/// Put message without locking.
-	/// `available` must be checked before.
+	/// Check `available` before to prevent message loss.
 	void put(Value)(Value value)
 	{
 		if (this.available <= 0)
@@ -75,20 +74,20 @@ class Queue(
 	}
 
 	/// Create and put message.
-	/// `available` must be checked before.
+	/// Check `available` before to prevent message loss.
 	void put(Value, Args...)(Args args)
 	{
 		this.put(Value(args));
 	}
 
-	/// True when no more messages can never be consumed.
+	/// True when no more messages can be consumed ever.
 	auto empty()
 	{
 		return this.pending < 0;
 	}
 
 	/// Get current pending message.
-	/// `pending` must be checked before.
+	/// Check `pending` before to prevent lock.
 	Message front()
 	{
 		assert(this.pending > 0, "Queue is empty");
@@ -97,7 +96,7 @@ class Queue(
 	}
 
 	/// Consume current pending message.
-	/// `pending` must be checked before.
+	/// Check `pending` before to prevent lock.
 	void popFront()
 	{
 		assert(this.pending > 0, "Queue is empty");
